@@ -28,18 +28,28 @@ export function NotificationFilterTabs({
         return (
           <Pressable
             key={filter.key}
+            accessibilityLabel={`${filter.label}, ${counts[filter.key]}`}
             accessibilityRole="button"
             accessibilityState={{ selected: isActive }}
             style={[notificationStyles.filterTab, isActive ? notificationStyles.filterTabActive : null]}
             onPress={() => onChange(filter.key)}
           >
             <Text
+              numberOfLines={1}
               style={[
                 notificationStyles.filterTabLabel,
                 isActive ? notificationStyles.filterTabLabelActive : null,
               ]}
             >
-              {filter.label} ({counts[filter.key]})
+              {filter.label}
+            </Text>
+            <Text
+              style={[
+                notificationStyles.filterCount,
+                isActive ? notificationStyles.filterCountActive : null,
+              ]}
+            >
+              {counts[filter.key]}
             </Text>
           </Pressable>
         );

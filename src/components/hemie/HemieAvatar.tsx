@@ -1,49 +1,34 @@
-import { Image, StyleSheet, View } from 'react-native';
+import { Image, StyleSheet } from 'react-native';
 
 import hemieImage from '@/assets/images/hemie.png';
 import { colors } from '@/constants/theme';
+
+/** Cropped Hemie  mark aspect ratio (width / height). */
+const LOGO_ASPECT = 723 / 554;
 
 type HemieAvatarProps = {
   size?: number;
 };
 
-export function HemieAvatar({ size = 40 }: HemieAvatarProps) {
-  const imageSize = Math.round(size * 0.78);
+export function HemieAvatar({ size = 48 }: HemieAvatarProps) {
+  const width = size;
+  const height = Math.round(size / LOGO_ASPECT);
 
   return (
-    <View style={[styles.ring, { borderRadius: size / 2, height: size, width: size }]}>
-      <View
-        style={[
-          styles.imageClip,
-          {
-            borderRadius: imageSize / 2,
-            height: imageSize,
-            width: imageSize,
-          },
-        ]}
-      >
-        <Image
-          resizeMode="cover"
-          source={hemieImage}
-          style={{ height: imageSize, width: imageSize }}
-        />
-      </View>
-    </View>
+    <Image
+      accessibilityIgnoresInvertColors
+      resizeMode="contain"
+      source={hemieImage}
+      style={[styles.logo, { height, width }]}
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  imageClip: {
-    alignItems: 'center',
-    backgroundColor: '#000',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  ring: {
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderColor: colors.border,
-    borderWidth: 2,
-    justifyContent: 'center',
+  logo: {
+    shadowColor: colors.foreground,
+    shadowOffset: { height: 1, width: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
   },
 });

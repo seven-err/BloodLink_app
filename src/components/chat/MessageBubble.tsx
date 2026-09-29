@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   bubbleOwn: {
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.foreground,
   },
   metaRow: {
     alignItems: 'center',

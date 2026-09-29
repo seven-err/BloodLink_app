@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ArrowLeft, Info, Send } from 'lucide-react-native';
+import { ArrowLeft, Flag, Info, Send } from 'lucide-react-native';
 import {
   FlatList,
   Platform,
@@ -26,6 +26,7 @@ import { chatStyles } from '@/screens/chat/styles';
 import { recipientStyles } from '@/screens/recipient/styles';
 import { getBloodRequestById } from '@/services/supabase/bloodRequests';
 import {
+  getConversationCounterpart,
   listMessages,
   markUnreadMessagesRead,
   sendMessage,
@@ -87,6 +88,27 @@ export function ChatThreadScreen({ navigation, route }: Props) {
     patient_name: string | null;
     blood_type: BloodType;
   } | null>(() => cachedDetails ?? null);
+  const [resolvedName, setResolvedName] = useState(
+    () => recipientDisplayName?.trim() || '',
+  );
+  const [resolvedRecipientId, setResolvedRecipientId] = useState(recipientId);
+
+  useEffect(() => {
+    let active = true;
+
+    void getConversationCounterpart(donorMatchId).then((counterpart) => {
+      if (!active || !counterpart) {
+        return;
+      }
+
+      setResolvedName(counterpart.displayName);
+      setResolvedRecipientId(counterpart.otherPartyId);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [donorMatchId]);
 
   useEffect(() => {
     const fetchRequestDetails = async () => {
@@ -109,12 +131,12 @@ export function ChatThreadScreen({ navigation, route }: Props) {
     () => ({
       bloodRequestId,
       donorMatchId,
-      recipientId,
+      recipientId: resolvedRecipientId,
     }),
-    [bloodRequestId, donorMatchId, recipientId],
+    [bloodRequestId, donorMatchId, resolvedRecipientId],
   );
 
-  const headerLabel = recipientDisplayName?.trim() || 'Conversation';
+  const headerLabel = resolvedName.trim() || recipientDisplayName?.trim() || 'Conversation';
   const keyboardOpen = keyboardHeight > 0;
   const composerBottom = keyboardOpen ? keyboardHeight + KEYBOARD_COMPOSER_LIFT : 0;
   const composerPaddingBottom = keyboardOpen ? 12 : Math.max(bottomInset, 12);
@@ -127,7 +149,7 @@ export function ChatThreadScreen({ navigation, route }: Props) {
     if (requestDetails.hospital_name) {
       subtitleParts.push(requestDetails.hospital_name);
     }
-    if (requestDetails.patient_name) {
+    if (requestDetails.patient_name && requestDetails.patient_name.trim() !== headerLabel) {
       subtitleParts.push(requestDetails.patient_name);
     }
     if (requestDetails.blood_type) {
@@ -215,7 +237,7 @@ export function ChatThreadScreen({ navigation, route }: Props) {
     setSendState('sending');
     setSendError(null);
 
-    const result = await sendMessage(currentUserId, recipientId, draft, {
+    const result = await sendMessage(currentUserId, resolvedRecipientId, draft, {
       bloodRequestId,
       donorMatchId,
     });
@@ -235,7 +257,7 @@ export function ChatThreadScreen({ navigation, route }: Props) {
 
     setSendState('error');
     setSendError(result.message);
-  }, [bloodRequestId, cacheKeyMessages, currentUserId, donorMatchId, draft, recipientId, scrollToBottom]);
+  }, [bloodRequestId, cacheKeyMessages, currentUserId, donorMatchId, draft, resolvedRecipientId, scrollToBottom]);
 
   const showSafetyBanner = useCallback(() => {
     void showChatSafetyBanner().then(() => {
@@ -282,18 +304,33 @@ export function ChatThreadScreen({ navigation, route }: Props) {
           </Text>
           <Text style={chatStyles.headerSubtitle}>{headerSubtitle}</Text>
         </View>
-        {!safetyBannerVisible ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <Pressable
-            accessibilityLabel="Show secure chat notice"
+            accessibilityLabel="Report this conversation"
             accessibilityRole="button"
             style={chatStyles.headerInfoButton}
-            onPress={showSafetyBanner}
+            onPress={() =>
+              navigation.navigate('ReportSafety', {
+                reportedUserId: resolvedRecipientId,
+                reportedDisplayName: headerLabel,
+                bloodRequestId,
+                defaultType: 'user',
+              })
+            }
           >
-            <Info color={colors.primary} size={18} />
+            <Flag color={colors.warning} size={18} />
           </Pressable>
-        ) : (
-          <View style={{ width: 36 }} />
-        )}
+          {!safetyBannerVisible ? (
+            <Pressable
+              accessibilityLabel="Show secure chat notice"
+              accessibilityRole="button"
+              style={chatStyles.headerInfoButton}
+              onPress={showSafetyBanner}
+            >
+              <Info color={colors.info} size={18} />
+            </Pressable>
+          ) : null}
+        </View>
       </View>
 
       <FlatList

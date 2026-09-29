@@ -8,21 +8,22 @@ import {
   View,
 } from 'react-native';
 
-const OTP_LENGTH = 6;
+const DEFAULT_OTP_LENGTH = 6;
 
 type OtpInputProps = {
   value: string;
   onChange: (value: string) => void;
   error?: string;
+  length?: number;
 };
 
-export function OtpInput({ value, onChange, error }: OtpInputProps) {
+export function OtpInput({ value, onChange, error, length = DEFAULT_OTP_LENGTH }: OtpInputProps) {
   const inputRef = useRef<TextInput>(null);
-  const digits = value.padEnd(OTP_LENGTH, ' ').slice(0, OTP_LENGTH).split('');
-  const activeIndex = Math.min(value.length, OTP_LENGTH - 1);
+  const digits = value.padEnd(length, ' ').slice(0, length).split('');
+  const activeIndex = Math.min(value.length, length - 1);
 
   const updateValue = (next: string) => {
-    onChange(next.replace(/\D/g, '').slice(0, OTP_LENGTH));
+    onChange(next.replace(/\D/g, '').slice(0, length));
   };
 
   const handleKeyPress = (event: TextInputKeyPressEvent) => {
@@ -37,7 +38,7 @@ export function OtpInput({ value, onChange, error }: OtpInputProps) {
     <View style={styles.wrap}>
       <Pressable style={styles.row} onPress={() => inputRef.current?.focus()}>
         {digits.map((digit, index) => {
-          const isActive = index === activeIndex && value.length < OTP_LENGTH;
+          const isActive = index === activeIndex && value.length < length;
           const isFilled = digit.trim().length > 0;
 
           return (
@@ -59,7 +60,7 @@ export function OtpInput({ value, onChange, error }: OtpInputProps) {
         ref={inputRef}
         autoComplete="one-time-code"
         keyboardType="number-pad"
-        maxLength={OTP_LENGTH}
+        maxLength={length}
         onChangeText={updateValue}
         onKeyPress={handleKeyPress}
         style={styles.hiddenInput}

@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   screen: {
-    backgroundColor: colors.backgroundTint,
+    backgroundColor: colors.background,
     flex: 1,
     gap: 18,
     justifyContent: 'center',

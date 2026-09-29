@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   screen: {
-    backgroundColor: colors.backgroundTint,
+    backgroundColor: colors.background,
     flex: 1,
   },
   title: {

@@ -10,7 +10,6 @@ import { requestPhoneOtp, verifyPhoneOtp } from '@/services/supabase/auth';
 import { formatPhoneDisplay } from '@/utils/phone';
 import { AuthBackButton } from './AuthBackButton';
 import { AuthBrand } from './AuthBrand';
-import { SecurityFooter } from './SecurityFooter';
 import { authStyles } from './styles';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'VerifyOtp'>;
@@ -122,7 +121,6 @@ export function VerifyOtpScreen({ navigation, route }: Props) {
           title="Verify"
           onPress={onVerify}
         />
-        <SecurityFooter />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -151,7 +149,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   resendLink: {
-    color: colors.primary,
+    color: colors.foreground,
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',

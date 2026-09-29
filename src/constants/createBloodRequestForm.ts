@@ -17,3 +17,15 @@ export const mapFormUrgencyToDb = (level: FormUrgencyLevel): BloodRequestUrgency
   const option = FORM_URGENCY_OPTIONS.find((item) => item.id === level);
   return option?.value ?? 'normal';
 };
+
+export const mapDbUrgencyToForm = (urgency: BloodRequestUrgency): FormUrgencyLevel => {
+  if (urgency === 'critical') {
+    return 'critical';
+  }
+
+  if (urgency === 'urgent') {
+    return 'high';
+  }
+
+  return 'medium';
+};

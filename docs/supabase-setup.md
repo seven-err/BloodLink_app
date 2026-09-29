@@ -25,13 +25,58 @@ This guide implements Task 1.2 for a manually created Supabase project.
 In Supabase Dashboard > Authentication > Providers:
 
 1. Enable Email provider.
-2. Enable Phone provider (no Twilio required when using the Send SMS Hook below).
-3. Enable Google provider (Web client ID + optional iOS/Android client IDs from Google Cloud Console).
-4. Configure MensaHero SMS delivery (section 3a) before relying on phone OTP in the app.
+2. Enable **Confirm email**. BloodLink expects confirmation before creating a session.
+3. Enable Phone provider (no Twilio required when using the Send SMS Hook below).
+4. Enable Google provider (Web client ID + optional iOS/Android client IDs from Google Cloud Console).
+5. Configure Brevo email delivery (section 3a), then PhilSMS delivery (section 3b).
 
-### 3a. MensaHero SMS (Send SMS Hook)
+### 3a. Brevo SMTP (email confirmation)
 
-BloodLink sends phone OTPs through a Supabase Edge Function (`send-sms`) that calls [MensaHero](https://openmensahero.web.app).
+Supabase Auth—not the Expo client—must send sign-up confirmation messages through Brevo. Do not put the Brevo SMTP key in the app or in any `EXPO_PUBLIC_*` variable.
+
+1. In Brevo, open **Settings > Senders, Domains & Dedicated IPs**:
+   - Add a sender such as `no-reply@your-domain.example`.
+   - Authenticate the sender domain with Brevo's DKIM and DMARC DNS records.
+   - Wait until Brevo shows the domain and sender as authenticated.
+2. In Brevo, open **Settings > SMTP & API > SMTP**:
+   - Generate a standard SMTP key named `BloodLink Supabase Auth`.
+   - Copy it immediately; Brevo only shows the complete key once.
+   - Copy the displayed **SMTP login** separately. It may differ from the Brevo account email.
+3. In Supabase Dashboard, open **Authentication > Emails > SMTP Settings** and enable custom SMTP:
+   - Sender email: the verified Brevo sender from step 1
+   - Sender name: `BloodLink`
+   - Host: `smtp-relay.brevo.com`
+   - Port: `587`
+   - Username: the Brevo SMTP login
+   - Password: the Brevo SMTP key (not a Brevo API key)
+4. In **Authentication > Sign In / Providers > Email**, keep **Confirm email** enabled.
+5. In **Authentication > URL Configuration**, keep these redirect URLs:
+   - `bloodlink://auth/email-confirmed`
+   - `bloodlink://auth/reset-password`
+   - `bloodlink://**`
+   - `exp://**/auth/email-confirmed`
+   - `exp://**/auth/reset-password`
+   - `http://localhost:8081/**` (development only)
+6. In **Authentication > Email Templates > Confirm signup**, keep both variables in the message:
+   - Confirmation button URL: `{{ .ConfirmationURL }}`
+   - Fallback code: `{{ .Token }}`
+7. In Brevo transactional settings, disable click/link tracking for authentication mail so the single-use Supabase confirmation URL is not rewritten.
+
+#### End-to-end verification
+
+Use a new email address (or delete only the disposable test user first), then:
+
+1. Sign up in BloodLink.
+2. Confirm Supabase returns a user with no session and the app opens **Verify email**.
+3. In Brevo **Transactional > Logs**, confirm the message is `Delivered`.
+4. Open the message and confirm the sender domain passes DKIM/DMARC in the mailbox's message details.
+5. Click the confirmation button and verify BloodLink opens the email-confirmed flow.
+6. Repeat with another test address and enter the 8-digit fallback code instead of clicking the link.
+7. If a message is absent, inspect **Supabase > Logs > Auth** first, then the Brevo transactional log. Supabase errors mean handoff/configuration failed; a Brevo delivery/bounce status means the message reached Brevo and must be diagnosed there.
+
+### 3b. PhilSMS (Send SMS Hook + app alerts)
+
+BloodLink sends phone OTPs through a Supabase Edge Function (`send-sms`) that calls [PhilSMS](https://dashboard.philsms.com/developers/docs). Opt-in emergency SMS alerts (blood requests, matches, donations) go through `send-alert-sms`, triggered by a Database Webhook on `public.notifications` INSERT.
 
 **Dashboard quirk:** Phone provider save can require Twilio fields even when using the SMS Hook ([supabase#45198](https://github.com/supabase/supabase/issues/45198)). Use this order:
 
@@ -48,56 +93,65 @@ BloodLink sends phone OTPs through a Supabase Edge Function (`send-sms`) that ca
    - Enable HTTPS hook
    - URL: `https://qyfmmjxxttncmyetxczf.supabase.co/functions/v1/send-sms`
    - Generate / copy secret (`v1,whsec_...`)
-4. Set Edge Function secrets (API key + device name should already be set):
+4. Set Edge Function secrets (API token from [PhilSMS dashboard](https://dashboard.philsms.com/)):
 
 ```bash
 npx supabase secrets set --project-ref qyfmmjxxttncmyetxczf \
-  SEND_SMS_HOOK_SECRET=v1,whsec_xxx
+  PHILSMS_API_TOKEN=your_philsms_api_token \
+  PHILSMS_SENDER_ID=PhilSMS \
+  SEND_SMS_HOOK_SECRET=v1,whsec_xxx \
+  ALERT_SMS_SECRET=generate_a_long_random_secret
 ```
 
-5. Keep the MensaHero Android gateway online with device name matching `MENSAHERO_DEVICE_NAME` (currently `sev`).
+`PHILSMS_SENDER_ID` must be an approved alphanumeric sender ID (max 11 characters).
 
-Never put `MENSAHERO_API_KEY` or `SEND_SMS_HOOK_SECRET` in `EXPO_PUBLIC_*` env vars.
+5. Deploy both functions:
 
-With the hook enabled, Auth ignores Twilio and calls MensaHero via `send-sms`.
+```bash
+npx supabase functions deploy send-sms --project-ref qyfmmjxxttncmyetxczf
+npx supabase functions deploy send-alert-sms --project-ref qyfmmjxxttncmyetxczf
+```
 
-### Google Sign-In (native in-app picker)
+6. Database → Webhooks → create webhook:
+   - Table: `public.notifications`
+   - Events: **Insert**
+   - Type: HTTP Request
+   - URL: `https://qyfmmjxxttncmyetxczf.supabase.co/functions/v1/send-alert-sms`
+   - HTTP Headers: `x-alert-sms-secret` = same value as `ALERT_SMS_SECRET`
+   - Timeout: leave default
 
-Mobile uses the Google Sign-In SDK (account chooser over the app). Web still uses browser OAuth.
+7. Apply migration `202609100001_notification_sms_enabled.sql` (adds `notification_preferences.sms_enabled`, default `false`). Users opt in under Settings → SMS Alerts (requires `profiles.phone`).
+
+**Alert rules (enforced in `send-alert-sms`):**
+
+- Types: `blood_request`, `donor_match`, `donation` only
+- `blood_request`: SMS only when `data.urgency` is `critical` or `high`
+- User must have `sms_enabled = true` and a non-empty `profiles.phone`
+
+Never put `PHILSMS_API_TOKEN`, `ALERT_SMS_SECRET`, or `SEND_SMS_HOOK_SECRET` in `EXPO_PUBLIC_*` env vars.
+
+With the Auth hook enabled, Auth ignores Twilio and delivers OTPs via `send-sms` (PhilSMS).
+
+### Google Sign-In
+
+Android and iOS use the native Google account picker when the Google Sign-In module is in the binary. Web still uses browser OAuth. Native Android sign-in requires an Android OAuth client with package `com.sevenerr.BloodLink` and the SHA-1 of the keystore that signed the installed APK (EAS preview, production, and debug certificates are different).
 
 1. In [Google Cloud Console](https://console.cloud.google.com/auth/clients), create:
-   - **Web application** OAuth client (required — used as `webClientId` / ID token audience)
-   - **Android** OAuth client — package `com.sevenerr.BloodLink` + your debug/release SHA-1
-   - **iOS** OAuth client — bundle ID `com.sevenerr.BloodLink` (optional until you build iOS)
-2. Authorized redirect URI on the **Web** client (for Supabase / web login):
+   - **Web application** OAuth client (required — Supabase Google provider + ID tokens)
+   - **Android** OAuth client — package `com.sevenerr.BloodLink` and the SHA-1 of the keystore that signed the APK
+   - **iOS** OAuth client — bundle ID `com.sevenerr.BloodLink` (optional; iOS falls back to browser OAuth)
+2. Authorized redirect URI on the **Web** client (for Supabase):
    `https://<project-ref>.supabase.co/auth/v1/callback`
 3. Supabase Dashboard > Authentication > Providers > Google:
    - Enable Google
    - Paste Web client ID + secret
-   - Add Android / iOS client IDs (comma-separated) if prompted
+   - Add the iOS client ID if you use the native iOS picker
    - Enable **Skip nonce check** for native iOS ID-token sign-in
 4. App env (`.env` / `.env.local`):
    - `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` = Web client ID
-   - `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` = iOS client ID (iOS builds)
+   - `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` = iOS client ID (optional)
    - `EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME` = reversed iOS client ID, e.g. `com.googleusercontent.apps.1234-abcd`
-5. Rebuild the native app after adding the plugin (this is **not** supported in Expo Go):
-
-```bash
-# Cloud (recommended if Android SDK is not installed locally)
-npm run build:dev:android
-
-# Or local
-npx expo prebuild --clean
-npx expo run:android
-```
-
-Install the new APK/dev client, then start Metro with `npx expo start` and open the **BloodLink** development build (not Expo Go).
-
-For Android Google Sign-In, the OAuth Android client must use package `com.sevenerr.BloodLink` and the **SHA-1 of the keystore that signed the installed APK** (EAS credentials keystore for EAS builds, or your local debug keystore for `expo run:android`). Get the fingerprint with:
-
-```bash
-eas credentials -p android
-```
+5. A preview APK that already includes `@react-native-google-signin/google-signin` can pick up the native flow with `eas update --channel preview`. A new APK is only required if that native module is missing from the installed binary.
 
 Web redirect allow list (Authentication > URL Configuration):
 
@@ -106,7 +160,7 @@ Web redirect allow list (Authentication > URL Configuration):
 - `bloodlink://**`
 - `exp://**`
 
-Email confirmation uses a native deep link (`bloodlink://` / `exp://`) on device, or `http://localhost:8081/?email_confirmed=1` on Expo web. After confirm, the app shows **You're all set**. Resend the confirmation email after changing Redirect URLs — old links keep the previous address.
+Password recovery uses `bloodlink://auth/reset-password` / `exp://.../auth/reset-password` on device. In Expo web, the app uses the current web origin (localhost during development) and shows the **Choose a new password** screen. Send reset emails from BloodLink's **Forgot Password?** action so the app supplies the correct redirect; links created directly from the Supabase dashboard use the configured Site URL and may point to an old localhost address. Email confirmation uses a native deep link (`bloodlink://` / `exp://`) on device, or `http://localhost:8081/?email_confirmed=1` on Expo web. Resend the confirmation or reset email after changing Redirect URLs — old links keep the previous address.
 
 The app client stores sessions with `expo-secure-store` through `src/services/supabase/client.ts`.
 

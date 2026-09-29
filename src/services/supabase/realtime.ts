@@ -229,5 +229,55 @@ export const subscribeToMessages = (
   };
 };
 
+export const subscribeToDonation = (
+  donationId: string,
+  onChange: SubscriptionHandler<unknown>,
+): RealtimeSubscription => {
+  const channel = supabase
+    .channel(`donations:id:${donationId}:${Date.now()}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'donations',
+        filter: `id=eq.${donationId}`,
+      },
+      onChange,
+    )
+    .subscribe();
+
+  return {
+    stop: () => {
+      supabase.removeChannel(channel);
+    },
+  };
+};
+
+export const subscribeToRequestDonations = (
+  requestId: string,
+  onChange: SubscriptionHandler<unknown>,
+): RealtimeSubscription => {
+  const channel = supabase
+    .channel(`donations:request:${requestId}:${Date.now()}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'donations',
+        filter: `request_id=eq.${requestId}`,
+      },
+      onChange,
+    )
+    .subscribe();
+
+  return {
+    stop: () => {
+      supabase.removeChannel(channel);
+    },
+  };
+};
+
 export const unsubscribe = (channel: RealtimeChannel) =>
   supabase.removeChannel(channel);

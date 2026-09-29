@@ -27,17 +27,27 @@ import { RequestLocationMapPreview } from '@/components/map/RequestLocationMapPr
 import { DonorVerificationBadge } from '@/components/donor/DonorVerificationBadge';
 import { PrimaryButton } from '@/components/common/PrimaryButton';
 import { colors, fontFamilies } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
 import type { AppStackParamList } from '@/navigation/types';
 import { authStyles } from '@/screens/auth/styles';
 import { recipientStyles } from '@/screens/recipient/styles';
-import { getBloodRequestById, type BloodRequest } from '@/services/supabase/bloodRequests';
+import {
+  canEditBloodRequest,
+  getBloodRequestById,
+  type BloodRequest,
+} from '@/services/supabase/bloodRequests';
 import {
   acceptDonorMatch,
   declineDonorMatch,
   listMatchesForRequest,
   type RecipientDonorMatchResponse,
 } from '@/services/supabase/donorMatches';
-import { subscribeToRequestMatches } from '@/services/supabase/realtime';
+import {
+  describeDonationVerification,
+  listDonationVerificationsForRequest,
+  type DonationVerification,
+} from '@/services/supabase/donations';
+import { subscribeToRequestDonations, subscribeToRequestMatches } from '@/services/supabase/realtime';
 import { resolveDonorVerificationDisplay } from '@/utils/donorVerificationDisplay';
 import { formatDistance, formatTravelTime } from '@/utils/travelMetrics';
 
@@ -78,6 +88,7 @@ function DetailRow({
 function DonorResponseCard({
   bloodRequestId,
   match,
+  donation,
   actionMatchId,
   actionState,
   actionError,
@@ -91,6 +102,7 @@ function DonorResponseCard({
 }: {
   bloodRequestId: string;
   match: RecipientDonorMatchResponse;
+  donation: DonationVerification | null;
   actionMatchId: string | null;
   actionState: MatchActionState;
   actionError: string | null;
@@ -147,6 +159,21 @@ function DonorResponseCard({
       <Text style={recipientStyles.donorResponseMeta}>
         Responded {formatDateTime(match.responded_at ?? match.created_at)}
       </Text>
+
+      {match.status === 'accepted' || match.status === 'completed' ? (
+        <Text
+          style={
+            donation?.status === 'completed'
+              ? recipientStyles.successText
+              : recipientStyles.donorResponseMeta
+          }
+        >
+          {describeDonationVerification(donation?.status ?? null, match.status)}
+          {donation?.completedAt
+            ? ` Verified ${formatDateTime(donation.completedAt)}.`
+            : ''}
+        </Text>
+      ) : null}
 
       {/* Actions */}
       {isPending ? (
@@ -222,6 +249,7 @@ function DonorResponseCard({
 function DonorResponsesSection({
   bloodRequestId,
   matches,
+  donationsByMatchId,
   matchesLoading,
   matchesError,
   actionMatchId,
@@ -239,6 +267,7 @@ function DonorResponsesSection({
 }: {
   bloodRequestId: string;
   matches: RecipientDonorMatchResponse[];
+  donationsByMatchId: Record<string, DonationVerification>;
   matchesLoading: boolean;
   matchesError: string | null;
   actionMatchId: string | null;
@@ -262,7 +291,7 @@ function DonorResponsesSection({
 
       {matchesLoading ? (
         <View style={recipientStyles.card}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.muted} />
           <Text style={recipientStyles.subtitle}>Loading donor responses…</Text>
         </View>
       ) : matchesError ? (
@@ -294,6 +323,7 @@ function DonorResponsesSection({
               bloodRequestId={bloodRequestId}
               confirmAction={confirmAction}
               confirmMatchId={confirmMatchId}
+              donation={donationsByMatchId[match.id] ?? null}
               match={match}
               navigation={navigation}
               onAccept={onAccept}
@@ -312,6 +342,7 @@ import { appCache } from '@/utils/appCache';
 
 export function BloodRequestDetailScreen({ navigation, route }: Props) {
   const { top: topInset } = useSafeAreaInsets();
+  const { session } = useAuth();
   const { requestId } = route.params;
 
   const cachedRequest = appCache.getSync<BloodRequest>(`blood_request:detail:${requestId}`);
@@ -319,6 +350,9 @@ export function BloodRequestDetailScreen({ navigation, route }: Props) {
 
   const [request, setRequest] = useState<BloodRequest | null>(() => cachedRequest ?? null);
   const [matches, setMatches] = useState<RecipientDonorMatchResponse[]>(() => cachedMatches ?? []);
+  const [donationsByMatchId, setDonationsByMatchId] = useState<Record<string, DonationVerification>>(
+    {},
+  );
   const [loading, setLoading] = useState(() => cachedRequest === undefined);
   const [matchesLoading, setMatchesLoading] = useState(() => cachedMatches === undefined);
   const [error, setError] = useState<string | null>(null);
@@ -331,6 +365,18 @@ export function BloodRequestDetailScreen({ navigation, route }: Props) {
   const [confirmMatchId, setConfirmMatchId] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const pendingMatchRef = useRef<RecipientDonorMatchResponse | null>(null);
+
+  const loadDonationVerifications = useCallback(async () => {
+    const { data, error: fetchError } = await listDonationVerificationsForRequest(requestId);
+
+    if (fetchError || !data) {
+      return;
+    }
+
+    setDonationsByMatchId(
+      Object.fromEntries(data.map((verification) => [verification.matchId, verification])),
+    );
+  }, [requestId]);
 
   const loadMatches = useCallback(async (isSilent = false) => {
     if (!isSilent && !appCache.getSync(`blood_request:matches:${requestId}`)) {
@@ -385,19 +431,25 @@ export function BloodRequestDetailScreen({ navigation, route }: Props) {
     setActionError(null);
     setActionState('idle');
     setActionMatchId(null);
-    await Promise.all([loadRequest(isSilent), loadMatches(isSilent)]);
-  }, [loadMatches, loadRequest]);
+    await Promise.all([loadRequest(isSilent), loadMatches(isSilent), loadDonationVerifications()]);
+  }, [loadDonationVerifications, loadMatches, loadRequest]);
 
   useEffect(() => {
-    const subscription = subscribeToRequestMatches(requestId, () => {
+    const matchSubscription = subscribeToRequestMatches(requestId, () => {
       void loadMatches(true);
+      void loadRequest(true);
+      void loadDonationVerifications();
+    });
+    const donationSubscription = subscribeToRequestDonations(requestId, () => {
+      void loadDonationVerifications();
       void loadRequest(true);
     });
 
     return () => {
-      subscription.stop();
+      matchSubscription.stop();
+      donationSubscription.stop();
     };
-  }, [requestId, loadMatches, loadRequest]);
+  }, [requestId, loadDonationVerifications, loadMatches, loadRequest]);
 
   useFocusEffect(
     useCallback(() => {
@@ -427,6 +479,7 @@ export function BloodRequestDetailScreen({ navigation, route }: Props) {
       const donorLabel = match.donor_name?.trim() || 'this donor';
 
       if (result.kind === 'success') {
+        setActionError(null);
         setActionState('success');
         setActionSuccessMessage(
           action === 'accept'
@@ -434,6 +487,8 @@ export function BloodRequestDetailScreen({ navigation, route }: Props) {
             : `Declined ${donorLabel}'s response.`,
         );
         await loadMatches();
+        setActionError(null);
+        setActionMatchId(null);
         return;
       }
 
@@ -530,6 +585,16 @@ export function BloodRequestDetailScreen({ navigation, route }: Props) {
         >
           Request Details
         </Text>
+        {session?.user.id && canEditBloodRequest(request, session.user.id) ? (
+          <Pressable
+            accessibilityLabel="Edit request"
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={() => navigation.navigate('CreateBloodRequest', { requestId: request.id })}
+          >
+            <Text style={{ color: colors.primary, fontSize: 15, fontWeight: '700' }}>Edit</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <ScrollView
@@ -591,6 +656,7 @@ export function BloodRequestDetailScreen({ navigation, route }: Props) {
           confirmAction={confirmAction}
           confirmMatchId={confirmMatchId}
           matches={matches}
+          donationsByMatchId={donationsByMatchId}
           matchesError={matchesError}
           matchesLoading={matchesLoading}
           navigation={navigation}

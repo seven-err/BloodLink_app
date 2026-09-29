@@ -73,7 +73,7 @@ export function DocumentPickerField({
                 accessibilityRole="button"
                 onPress={() => removeDocument(index)}
               >
-                <X color={colors.primaryDark} size={16} />
+                <X color={colors.muted} size={16} />
               </Pressable>
             </View>
           ))}

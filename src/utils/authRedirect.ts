@@ -7,6 +7,8 @@ import { env } from '@/config/env';
 const DEFAULT_WEB_REDIRECT = 'http://localhost:8081';
 const EMAIL_CONFIRM_PATH = 'auth/email-confirmed';
 const EMAIL_CONFIRM_QUERY = 'email_confirmed';
+const PASSWORD_RECOVERY_PATH = 'auth/reset-password';
+const PASSWORD_RECOVERY_QUERY = 'password_recovery';
 
 const trimTrailingSlash = (value: string) => value.replace(/\/$/, '');
 
@@ -43,6 +45,20 @@ export const getOAuthAuthRedirectUrl = () => {
   }
 
   return DEFAULT_WEB_REDIRECT;
+};
+
+/** Redirect for password-recovery links. Keeps recovery separate from confirmation. */
+export const getPasswordRecoveryRedirectUrl = () => {
+  if (Platform.OS !== 'web') {
+    return Linking.createURL(PASSWORD_RECOVERY_PATH);
+  }
+
+  const base = trimTrailingSlash(
+    env.authRedirectUrl ||
+      (typeof window !== 'undefined' ? window.location.origin : DEFAULT_WEB_REDIRECT),
+  );
+
+  return `${base}/?${PASSWORD_RECOVERY_QUERY}=1`;
 };
 
 const getUrlSearchParams = (url: string) => {
@@ -91,7 +107,7 @@ export const parseTokenHashFromUrl = (url: string) => {
   if (tokenHash) {
     return {
       tokenHash,
-      type: (type && EMAIL_CONFIRMATION_TYPES.has(type) ? type : 'signup') as EmailOtpType,
+      type: (type && AUTH_EMAIL_OTP_TYPES.has(type) ? type : 'signup') as EmailOtpType,
     };
   }
 
@@ -119,6 +135,18 @@ export const parseAuthRedirectType = (url: string) => {
 };
 
 const EMAIL_CONFIRMATION_TYPES = new Set(['signup', 'email', 'email_change', 'invite']);
+const AUTH_EMAIL_OTP_TYPES = new Set([...EMAIL_CONFIRMATION_TYPES, 'magiclink', 'recovery']);
+
+export const isPasswordRecoveryRedirect = (url: string) => {
+  const params = getUrlSearchParams(url);
+
+  if (params.get(PASSWORD_RECOVERY_QUERY) === '1' || parseAuthRedirectType(url) === 'recovery') {
+    return true;
+  }
+
+  const path = (Linking.parse(url).path ?? '').replace(/^\/+/, '').toLowerCase();
+  return path === PASSWORD_RECOVERY_PATH || path.endsWith('reset-password');
+};
 
 /** True when the redirect is an email confirmation (not Google OAuth / recovery). */
 export const isEmailConfirmationRedirect = (url: string) => {

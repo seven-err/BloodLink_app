@@ -12,8 +12,8 @@ type UrgencyStyle = {
 
 const URGENCY_STYLES: Record<BloodRequestUrgency, UrgencyStyle> = {
   critical: {
-    backgroundColor: colors.primary,
-    color: colors.primaryForeground,
+    backgroundColor: colors.criticalSoft,
+    color: colors.critical,
   },
   normal: {
     backgroundColor: colors.infoSoft,

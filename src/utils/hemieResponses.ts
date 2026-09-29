@@ -11,13 +11,15 @@ import { getDaysUntilNextEligible } from '@/utils/donorDonationStats';
 
 export const HEMIE_SUGGESTED_QUESTIONS = [
   'Am I eligible to donate?',
-  'How does blood matching work?',
-  'How do I create a blood request?',
-  'What should I bring before donating?',
+  'How do I donate blood?',
+  'Blood type information',
+  'How do I use BloodLink?',
 ] as const;
 
-const WELCOME_MESSAGE =
-  "Hi! I'm Hemie, your BloodLink AI assistant. I'm here to help you with questions about blood donation, eligibility, and how BloodLink works. How can I assist you today?";
+export const HEMIE_DISCLAIMER =
+  'Hemie provides general information and BloodLink assistance. It does not replace professional medical advice or assessment by qualified healthcare personnel.';
+
+const WELCOME_MESSAGE = "Hi! I'm Hemie. How can I help you today?";
 
 export const getHemieWelcomeMessage = () => WELCOME_MESSAGE;
 
@@ -43,13 +45,16 @@ const ELIGIBILITY_PATTERN =
   /\b(eligib\w*|can i donate|am i able to donate|qualif\w*|requirements? to donate|allowed to donate|fit to donate|kwalipikado|(?:pwede|maaari)\b.{0,48}(?:mag[-\s]?donate|magbigay|\bdonate\b)|(?:ako(?:ng)?|ko(?:ng)?)\b.{0,24}(?:mag[-\s]?donate|magbigay|\bdonate\b)|karapat-dapat.{0,36}(?:mag[-\s]?donate|\bdonate\b))/i;
 
 const COMPATIBILITY_PATTERN =
-  /\b(match\w*|compatib\w*|blood\s*types?|abo(?:\s*\/?\s*rh)?|rh factor|who can (i |receive|donate)|universal donor|universal recipient|can (i |someone )?(give|receive|donate)|donate to|receive from|uri ng dugo|tumutugma)\b/i;
+  /\b(match\w*|compatib\w*|blood\s*types?|abo(?:\s*\/?\s*rh)?|rh factor|who can (?:i |someone )?(?:receive|donate|give)|universal donor|universal recipient|donate to|receive from|uri ng dugo|tumutugma|compatible)\b/i;
 
 const REQUEST_PATTERN =
   /\b((create|make|post|submit).{0,24}request|blood request|request blood|need blood|gumawa.{0,24}(request|kahilingan)|kailangan (ng )?dugo|mag-?request ng dugo)\b/i;
 
 const PREP_PATTERN =
-  /\b(bring|before donat\w*|prepar\w*|what (should|do) i (bring|do)|donation day|hydrate|ano (ang )?dapat (dalhin|gawin)|bago mag[-\s]?donate|maghanda)\b/i;
+  /\b(bring|before (?:i |you |ako )?(?:can |could |pwede )?(?:donat\w*|mag[-\s]?donate\w*)|before donat\w*|prepar\w*|what to do before|what (?:should|to do|do) (?:i |we )?(?:bring|do|need)|donation day|hydrate|ano (?:ang )?dapat (?:dalhin|gawin)|bago (?:ako )?mag[-\s]?donate|maghanda|steps before|prior to donat\w*)\b/i;
+
+const ON_TOPIC_PATTERN =
+  /\b(blood\s*links?|bloodlink|hemie|blood|donat\w*|donor|dugo|eligib\w*|kwalipikado|kahilingan|compatib\w*|transfus\w*|hospital|urgency|recipient|screening|openstreetmap|blood bank|platelet|plasma|abo|rh factor)\b/i;
 
 const AVAILABILITY_PATTERN =
   /\b(availability|available to donate|donation availability|toggle|available (ba )?(ako|to donate)|i-?on ang availability)\b/i;
@@ -167,9 +172,177 @@ const buildDonationIntervalReply = (context: HemieContext, locale: ReplyLocale):
     : `Based on your last donation on file, wait ${daysUntilEligible} more day${daysUntilEligible === 1 ? '' : 's'} before your next whole-blood donation (BloodLink uses a ${DONATION_INTERVAL_DAYS}-day interval).`;
 };
 
-export const getHemieResponse = (question: string, context: HemieContext = {}): string => {
+export type HemieHistoryMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
+const CLIENT_FOLLOW_UP =
+  /^(yes|yeah|yep|yup|ok|okay|sure|next|continue|go on|what(?:'s| is) next|and then|how do i do that|opo|sige|oo|susunod|tuloy)[.!?]*$/i;
+
+const CLIENT_DONOR_STEPS = ['eligibility', 'prep', 'availability', 'map', 'qr'] as const;
+const CLIENT_RECIPIENT_STEPS = ['request', 'compatibility', 'map', 'chat'] as const;
+
+const CLIENT_GUIDE_QUESTIONS: Record<string, string> = {
+  eligibility: 'Am I eligible to donate?',
+  prep: 'What should I do before I donate?',
+  availability: 'How do I turn on donation availability?',
+  map: 'How do I use the map?',
+  qr: 'How does QR verification work?',
+  request: 'How do I create a blood request?',
+  compatibility: 'How does blood matching work?',
+  chat: 'How do I message a donor?',
+};
+
+const classifyClientTopic = (question: string): string | null => {
   const normalized = normalizeQuestion(question);
+  if (!normalized || CLIENT_FOLLOW_UP.test(normalized)) return null;
+  if (EMERGENCY_PATTERN.test(normalized)) return 'safety';
+  if (OFF_TOPIC_PATTERN.test(normalized)) return 'guardrail';
+  if (ELIGIBILITY_PATTERN.test(normalized)) return 'eligibility';
+  if (INTERVAL_PATTERN.test(normalized)) return 'interval';
+  if (PREP_PATTERN.test(normalized)) return 'prep';
+  if (COMPATIBILITY_PATTERN.test(normalized)) return 'compatibility';
+  if (REQUEST_PATTERN.test(normalized)) return 'request';
+  if (AVAILABILITY_PATTERN.test(normalized)) return 'availability';
+  if (QR_PATTERN.test(normalized)) return 'qr';
+  if (MAP_PATTERN.test(normalized)) return 'map';
+  if (CHAT_PATTERN.test(normalized)) return 'chat';
+  if (HELP_PATTERN.test(normalized) || GREETING_PATTERN.test(normalized)) return 'help';
+  if (!ON_TOPIC_PATTERN.test(normalized)) return 'guardrail';
+  return null;
+};
+
+const clientGuideSteps = (context: HemieContext): readonly string[] =>
+  context.role === 'recipient' ? CLIENT_RECIPIENT_STEPS : CLIENT_DONOR_STEPS;
+
+const clientGuideCue = (topic: string, locale: ReplyLocale) => {
+  const cues: Record<string, { en: string; fil: string }> = {
+    eligibility: {
+      en: 'Reply "next" and I will check your eligibility against your BloodLink profile.',
+      fil: 'Mag-reply ng "next" at titingnan ko ang eligibility mo base sa BloodLink profile.',
+    },
+    prep: {
+      en: 'Reply "next" for what to bring and do before you donate.',
+      fil: 'Mag-reply ng "next" para sa dapat dalhin at gawin bago mag-donate.',
+    },
+    availability: {
+      en: 'Reply "next" and I will show you how to turn on Donation Availability on your Profile tab.',
+      fil: 'Mag-reply ng "next" para sa pag-on ng Donation Availability sa Profile tab.',
+    },
+    map: {
+      en: 'Reply "next" and I will show you how to find nearby requests or donors on the Map tab.',
+      fil: 'Mag-reply ng "next" para sa Map tab at nearby requests o donors.',
+    },
+    qr: {
+      en: 'Reply "next" for the QR verification step at the donation site.',
+      fil: 'Mag-reply ng "next" para sa QR verification sa donation site.',
+    },
+    request: {
+      en: 'Reply "next" and I will walk you through creating a blood request.',
+      fil: 'Mag-reply ng "next" para sa paggawa ng blood request.',
+    },
+    compatibility: {
+      en: 'Reply "next" and I will explain which blood types match.',
+      fil: 'Mag-reply ng "next" para sa blood type matching.',
+    },
+    chat: {
+      en: 'Reply "next" and I will show you how to message a matched donor or requester.',
+      fil: 'Mag-reply ng "next" para sa Messages tab.',
+    },
+  };
+  return cues[topic]?.[locale] ?? '';
+};
+
+const resolveClientQuestion = (
+  question: string,
+  history: HemieHistoryMessage[],
+  context: HemieContext,
+) => {
   const locale = detectUserLocale(question);
+  if (!CLIENT_FOLLOW_UP.test(normalizeQuestion(question))) {
+    return { question, locale, topic: classifyClientTopic(question), done: false };
+  }
+
+  const steps = clientGuideSteps(context);
+  let furthest = -1;
+  let priorFollowUps = 0;
+  for (const message of history.slice(0, -1)) {
+    if (message.role !== 'user') continue;
+    if (CLIENT_FOLLOW_UP.test(normalizeQuestion(message.content))) {
+      priorFollowUps += 1;
+      continue;
+    }
+    const index = steps.indexOf(classifyClientTopic(message.content) ?? '');
+    if (index > furthest) furthest = index;
+  }
+
+  const nextIndex = furthest + 1 + priorFollowUps;
+  if (nextIndex >= steps.length) {
+    return { question, locale, topic: null, done: true };
+  }
+
+  const topic = steps[nextIndex];
+  return { question: CLIENT_GUIDE_QUESTIONS[topic], locale, topic, done: false };
+};
+
+export const getHemieResponse = (
+  question: string,
+  context: HemieContext = {},
+  history: HemieHistoryMessage[] = [],
+): string => {
+  const guided = resolveClientQuestion(question, history, context);
+  if (guided.done) {
+    return guided.locale === 'fil'
+      ? 'Tapos na ang mga pangunahing hakbang sa BloodLink. Pwede mong tanungin ulit ang eligibility, matching, preparation, o QR verification.'
+      : 'That covers the main BloodLink steps. You can ask me to revisit eligibility, matching, preparation, or QR verification.';
+  }
+
+  const reply = buildHemieResponse(guided.question, context, guided.locale);
+  const topic = guided.topic || classifyClientTopic(guided.question);
+  return appendClientGuide(reply, topic, context, guided.locale);
+};
+
+const appendClientGuide = (
+  reply: string,
+  topic: string | null,
+  context: HemieContext,
+  locale: ReplyLocale,
+) => {
+  if (!topic || topic === 'safety' || topic === 'help') {
+    return reply;
+  }
+
+  if (topic === 'guardrail') {
+    const cue = clientGuideCue(clientGuideSteps(context)[0], locale);
+    return cue ? `${reply}\n\n${cue}` : reply;
+  }
+
+  const steps = clientGuideSteps(context);
+  const overrides =
+    context.role === 'recipient'
+      ? { eligibility: 'request', prep: 'request', interval: 'request', compatibility: 'map' }
+      : { compatibility: 'map', interval: 'prep', request: 'map' };
+  const nextTopic =
+    overrides[topic as keyof typeof overrides] ||
+    (steps.includes(topic)
+      ? steps[steps.indexOf(topic) + 1]
+      : steps[0]);
+
+  if (!nextTopic) {
+    return `${reply}\n\n${
+      locale === 'fil'
+        ? 'Tapos na ang mga pangunahing hakbang sa BloodLink. Pwede kang magtanong ulit tungkol sa eligibility o matching.'
+        : 'That covers the main BloodLink steps. You can ask me to revisit eligibility or matching.'
+    }`;
+  }
+
+  return `${reply}\n\n${clientGuideCue(nextTopic, locale)}`;
+};
+
+const buildHemieResponse = (question: string, context: HemieContext = {}, forcedLocale?: ReplyLocale): string => {
+  const normalized = normalizeQuestion(question);
+  const locale = forcedLocale || detectUserLocale(question);
 
   if (EMERGENCY_PATTERN.test(normalized)) {
     return locale === 'fil'
@@ -191,6 +364,12 @@ export const getHemieResponse = (question: string, context: HemieContext = {}): 
     return buildDonationIntervalReply(context, locale);
   }
 
+  if (PREP_PATTERN.test(normalized)) {
+    return locale === 'fil'
+      ? 'Bago mag-donate, magdala ng valid ID, kumain ng healthy meal, uminom ng maraming tubig, at magpahinga nang sapat. Iwasan ang alcohol bago mag-donate at i-disclose ang medications o recent illnesses sa screening.'
+      : 'Before donating, bring a valid ID, eat a healthy meal, drink plenty of water, and get adequate rest. Avoid alcohol before donation and disclose medications or recent illnesses during screening.';
+  }
+
   if (COMPATIBILITY_PATTERN.test(normalized)) {
     return buildCompatibilityReply(context, locale);
   }
@@ -205,12 +384,6 @@ export const getHemieResponse = (question: string, context: HemieContext = {}): 
     return locale === 'fil'
       ? 'Ang blood requests ay ginagawa ng recipients. Kung kailangan ng dugo, gamitin ang recipient mode o hilingin sa caregiver ng patient na gumawa ng request mula sa Recipient Home.'
       : "Blood requests are created by recipients. If you need blood, use recipient mode or ask the patient's caregiver to create a request from Recipient Home.";
-  }
-
-  if (PREP_PATTERN.test(normalized)) {
-    return locale === 'fil'
-      ? 'Bago mag-donate, magdala ng valid ID, kumain ng healthy meal, uminom ng maraming tubig, at magpahinga nang sapat. Iwasan ang alcohol bago mag-donate at i-disclose ang medications o recent illnesses sa screening.'
-      : 'Before donating, bring a valid ID, eat a healthy meal, drink plenty of water, and get adequate rest. Avoid alcohol before donation and disclose medications or recent illnesses during screening.';
   }
 
   if (AVAILABILITY_PATTERN.test(normalized)) {
@@ -238,9 +411,21 @@ export const getHemieResponse = (question: string, context: HemieContext = {}): 
   }
 
   if (HELP_PATTERN.test(normalized) || GREETING_PATTERN.test(normalized)) {
+    if (context.role === 'recipient') {
+      return locale === 'fil'
+        ? 'Gagabayan kita sa pag-request ng dugo.\n\n1. Gumawa ng blood request\n2. Tingnan ang matching\n3. Hanapin ang donors sa Map\n4. Mag-message sa Messages\n\nMag-reply ng "next" para magsimula.'
+        : 'I will guide you through requesting blood on BloodLink.\n\n1. Create a blood request\n2. Confirm compatible blood types\n3. Find nearby donors on the Map tab\n4. Message them in Messages\n\nReply "next" to start.';
+    }
+
     return locale === 'fil'
-      ? 'Ako si Hemie, BloodLink assistant mo. Magtanong tungkol sa eligibility, blood matching, donation timing, paggawa ng blood request, preparation, o paano gamitin ang BloodLink.'
-      : 'Hello! Ask me about eligibility, blood matching, donation timing, creating requests, preparation, or how BloodLink works.';
+      ? 'Gagabayan kita sa pag-donate gamit ang BloodLink.\n\n1. I-check ang eligibility\n2. Maghanda bago mag-donate\n3. I-on ang Donation Availability sa Profile tab\n4. Hanapin ang request sa Map\n5. Kumpletuhin ang QR verification\n\nMag-reply ng "next" para simulan ang eligibility check.'
+      : 'I will guide you through donating on BloodLink, one step at a time.\n\n1. Check eligibility\n2. Prepare for donation day\n3. Turn on Donation Availability on your Profile tab\n4. Find a matching request on the Map tab\n5. Complete QR verification at the donation site\n\nReply "next" to start with eligibility.';
+  }
+
+  if (!ON_TOPIC_PATTERN.test(normalized)) {
+    return locale === 'fil'
+      ? 'Ako si Hemie, BloodLink assistant mo. Tanging blood donation, eligibility, matching, at paggamit ng BloodLink ang kayang tulungan ko. Ano ang gusto mong malaman tungkol diyan?'
+      : "I'm Hemie, your BloodLink assistant. I can only help with blood donation, eligibility, matching, and how to use BloodLink. What would you like to know about those?";
   }
 
   return locale === 'fil'

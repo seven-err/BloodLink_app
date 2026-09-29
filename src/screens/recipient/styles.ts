@@ -193,7 +193,7 @@ export const recipientStyles = StyleSheet.create({
     textAlign: 'center',
   },
   eyebrow: {
-    color: colors.primary,
+    color: colors.muted,
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.8,

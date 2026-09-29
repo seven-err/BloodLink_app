@@ -24,7 +24,7 @@ export const chatStyles = StyleSheet.create({
     right: 0,
   },
   disclaimer: {
-    backgroundColor: colors.primaryTint,
+    backgroundColor: colors.infoSoft,
     borderColor: colors.borderAccent,
     borderRadius: radii.card,
     borderWidth: 1,
@@ -41,7 +41,7 @@ export const chatStyles = StyleSheet.create({
     gap: 10,
   },
   disclaimerText: {
-    color: colors.primaryDark,
+    color: colors.infoText,
     flex: 1,
     fontSize: 13,
     lineHeight: 18,

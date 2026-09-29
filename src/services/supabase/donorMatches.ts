@@ -1,6 +1,7 @@
 import { calculateRoute } from '@/services/maps/osm';
 import type { Database } from '@/types/database';
 
+import { isOwnBloodRequest } from './bloodRequests';
 import { supabase } from './client';
 
 export type DonorMatch = Database['public']['Tables']['donor_matches']['Row'];
@@ -106,6 +107,13 @@ export const respondToBloodRequest = async (
     return { kind: 'duplicate', match: existingMatch };
   }
 
+  if (await isOwnBloodRequest(requestId, donorId)) {
+    return {
+      kind: 'error',
+      message: 'You cannot donate to your own blood request.',
+    };
+  }
+
   const { distanceMeters, travelTimeSeconds } = await buildMatchMetrics(options);
 
   const { data, error } = await supabase
@@ -174,6 +182,19 @@ export const listMatchesForRequest = (requestId: string) =>
     .order('responded_at', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false });
 
+/** Hide raw database exception text from the request-details actions. */
+export const describeDonorMatchActionError = (message: string): string => {
+  if (/cannot change match status|unauthorized donor match status change/i.test(message)) {
+    return 'Only the owner of this request can accept or decline a pending donor response.';
+  }
+
+  if (/row-level security|permission denied|access denied/i.test(message)) {
+    return 'You are not allowed to update this donor response.';
+  }
+
+  return message;
+};
+
 const updatePendingDonorMatchStatus = async (
   matchId: string,
   status: 'accepted' | 'declined',
@@ -208,7 +229,7 @@ const updatePendingDonorMatchStatus = async (
     .maybeSingle();
 
   if (error) {
-    return { kind: 'error', message: error.message };
+    return { kind: 'error', message: describeDonorMatchActionError(error.message) };
   }
 
   if (!data) {

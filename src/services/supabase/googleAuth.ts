@@ -1,8 +1,9 @@
-import { TurboModuleRegistry } from 'react-native';
+import { Platform, TurboModuleRegistry } from 'react-native';
 
 import { env } from '@/config/env';
 
 import { supabase } from './client';
+import { signInWithGoogleOAuth } from './googleAuthOAuth';
 import type { GoogleSignInResult } from './googleAuth.types';
 
 export type { GoogleSignInResult } from './googleAuth.types';
@@ -52,21 +53,35 @@ const ensureGoogleSignInConfigured = (GoogleSignin: NativeGoogleSignInModule['Go
   configured = true;
 };
 
+const isDeveloperConfigError = (
+  error: unknown,
+  isErrorWithCode: NativeGoogleSignInModule['isErrorWithCode'],
+) => {
+  if (!isErrorWithCode(error)) {
+    return false;
+  }
+
+  return (
+    error.code === 'DEVELOPER_ERROR' ||
+    error.code === '10' ||
+    (typeof error.message === 'string' &&
+      (error.message.toUpperCase().includes('DEVELOPER_ERROR') ||
+        error.message.toLowerCase().includes('sha-1') ||
+        error.message.toLowerCase().includes('sha1')))
+  );
+};
+
 /**
- * In-app Google account picker (native SDK).
- * Requires a development/production build with @react-native-google-signin linked —
- * not Expo Go and not an older APK built before the plugin was added.
+ * Native Google account picker on Android and iOS.
+ * Web (and binaries that never linked RNGoogleSignin) still use browser OAuth.
+ * Android requires an OAuth client whose package is com.sevenerr.BloodLink and
+ * whose SHA-1 matches the keystore that signed this APK.
  */
 export const signInWithGooglePlatform = async (): Promise<GoogleSignInResult> => {
   const native = loadNativeGoogleSignIn();
 
-  if (!native) {
-    return {
-      data: null,
-      error: new Error(
-        'In-app Google Sign-In is not in this app binary. Install a fresh development build (eas build -p android --profile development, or npx expo run:android), then open that app — not Expo Go.',
-      ),
-    };
+  if (!native || (Platform.OS === 'ios' && !env.googleIosClientId)) {
+    return signInWithGoogleOAuth();
   }
 
   const { GoogleSignin, isErrorWithCode, isSuccessResponse, statusCodes } = native;
@@ -87,7 +102,7 @@ export const signInWithGooglePlatform = async (): Promise<GoogleSignInResult> =>
       return {
         data: null,
         error: new Error(
-          'Google did not return an ID token. Set EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID to your Web client ID (not the Android/iOS client ID).',
+          'Google did not return an ID token. Confirm EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is the Web client ID.',
         ),
       };
     }
@@ -118,19 +133,28 @@ export const signInWithGooglePlatform = async (): Promise<GoogleSignInResult> =>
         };
       }
 
-      if (
-        error.code === 'DEVELOPER_ERROR' ||
-        error.code === '10' ||
-        (typeof error.message === 'string' &&
-          error.message.toUpperCase().includes('DEVELOPER_ERROR'))
-      ) {
+      if (isDeveloperConfigError(error, isErrorWithCode)) {
         return {
           data: null,
           error: new Error(
-            'Google Sign-In developer error: check that the Android OAuth client uses package com.sevenerr.BloodLink and the SHA-1 of this build’s signing key.',
+            'Google Sign-In developer error. Add this APK signing SHA-1 to an Android OAuth client for com.sevenerr.BloodLink.',
           ),
         };
       }
+    }
+
+    if (
+      error instanceof Error &&
+      (error.message.toLowerCase().includes('sha-1') ||
+        error.message.toLowerCase().includes('sha1') ||
+        error.message.toUpperCase().includes('DEVELOPER_ERROR'))
+    ) {
+      return {
+        data: null,
+        error: new Error(
+          'Google Sign-In developer error. Add this APK signing SHA-1 to an Android OAuth client for com.sevenerr.BloodLink.',
+        ),
+      };
     }
 
     const message =

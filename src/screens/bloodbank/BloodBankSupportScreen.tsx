@@ -33,7 +33,7 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   email: {
-    color: colors.primaryDark,
+    color: colors.foreground,
     fontSize: 16,
     fontWeight: '700',
   },
@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   screen: {
-    backgroundColor: colors.backgroundTint,
+    backgroundColor: colors.background,
     flex: 1,
     gap: 16,
     justifyContent: 'center',

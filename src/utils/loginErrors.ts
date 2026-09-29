@@ -6,7 +6,7 @@ export const getLoginErrorMessage = (message: string) => {
   }
 
   if (normalized.includes('invalid login credentials')) {
-    return 'Incorrect email or password. Please try again.';
+    return 'Incorrect email or password. If you originally used Google, choose Continue with Google, or use Forgot Password to create a BloodLink password.';
   }
 
   if (normalized.includes('email logins are disabled')) {
@@ -22,7 +22,7 @@ export const getLoginErrorMessage = (message: string) => {
   }
 
   if (normalized.includes('developer error') || normalized.includes('sha-1')) {
-    return 'Google Sign-In is misconfigured for this build. Add this app’s SHA-1 fingerprint to the Android OAuth client in Google Cloud Console (package com.sevenerr.BloodLink).';
+    return 'Google sign-in needs this app’s signing SHA-1 on an Android OAuth client (package com.sevenerr.BloodLink). The in-app account picker will not open until that fingerprint is registered.';
   }
 
   if (

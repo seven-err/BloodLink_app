@@ -7,3 +7,4 @@ export * from './messages';
 export * from './notifications';
 export * from './openBloodRequestsFeed';
 export * from './realtime';
+export * from './reports';

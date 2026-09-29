@@ -1,7 +1,15 @@
 module.exports = function (api) {
-  api.cache(true);
+  const enableLocator = api.caller(
+    (caller) => caller?.platform === 'web' && caller?.isDev === true,
+  );
+
   return {
     presets: ['babel-preset-expo'],
-    plugins: ['react-native-reanimated/plugin'],
+    plugins: [
+      ...(enableLocator
+        ? [['./babel-plugins/locator-web', { env: 'development' }]]
+        : []),
+      'react-native-reanimated/plugin',
+    ],
   };
 };

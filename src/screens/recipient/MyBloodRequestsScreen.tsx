@@ -322,7 +322,7 @@ export function MyBloodRequestsScreen({ navigation }: Props) {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            tintColor={colors.primary}
+            tintColor={colors.muted}
             onRefresh={() => void loadRequests(true)}
           />
         }

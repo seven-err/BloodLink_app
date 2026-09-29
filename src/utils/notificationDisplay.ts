@@ -19,6 +19,15 @@ export type NotificationVisual = {
   iconBackground: string;
   iconColor: string;
   isHighPriority: boolean;
+  label: string;
+};
+
+export type NotificationDateGroup = 'today' | 'yesterday' | 'this_week' | 'earlier';
+
+export type NotificationSection = {
+  data: AppNotification[];
+  key: NotificationDateGroup;
+  title: string;
 };
 
 const readPriority = (notification: AppNotification) => {
@@ -45,6 +54,7 @@ export const getNotificationVisual = (notification: AppNotification): Notificati
         iconBackground: colors.primarySoft,
         iconColor: colors.primary,
         isHighPriority: true,
+        label: 'Blood request',
       };
     case 'donor_match':
       return {
@@ -52,6 +62,7 @@ export const getNotificationVisual = (notification: AppNotification): Notificati
         iconBackground: colors.primarySoft,
         iconColor: colors.primary,
         isHighPriority: true,
+        label: 'Match',
       };
     case 'donation':
       return {
@@ -59,6 +70,7 @@ export const getNotificationVisual = (notification: AppNotification): Notificati
         iconBackground: colors.successSoft,
         iconColor: colors.success,
         isHighPriority: isCritical,
+        label: 'Donation',
       };
     case 'verification':
       return {
@@ -66,6 +78,7 @@ export const getNotificationVisual = (notification: AppNotification): Notificati
         iconBackground: colors.successSoft,
         iconColor: colors.success,
         isHighPriority: false,
+        label: 'Verification',
       };
     case 'system':
       if (
@@ -77,6 +90,7 @@ export const getNotificationVisual = (notification: AppNotification): Notificati
           iconBackground: colors.infoSoft,
           iconColor: colors.info,
           isHighPriority: false,
+          label: 'Message',
         };
       }
 
@@ -89,14 +103,16 @@ export const getNotificationVisual = (notification: AppNotification): Notificati
           iconBackground: colors.orangeSoft,
           iconColor: colors.orangeText,
           isHighPriority: false,
+          label: 'Update',
         };
       }
 
       return {
         Icon: Megaphone,
-        iconBackground: '#ede9fe',
-        iconColor: '#7c3aed',
+        iconBackground: colors.infoSoft,
+        iconColor: colors.info,
         isHighPriority: false,
+        label: 'System',
       };
     default:
       return {
@@ -104,6 +120,7 @@ export const getNotificationVisual = (notification: AppNotification): Notificati
         iconBackground: colors.background,
         iconColor: colors.muted,
         isHighPriority: false,
+        label: 'Update',
       };
   }
 };
@@ -132,4 +149,54 @@ export const filterNotifications = (
     default:
       return notifications;
   }
+};
+
+const startOfLocalDay = (date: Date) => {
+  const copy = new Date(date);
+  copy.setHours(0, 0, 0, 0);
+  return copy.getTime();
+};
+
+const SECTION_TITLES: Record<NotificationDateGroup, string> = {
+  today: 'Today',
+  yesterday: 'Yesterday',
+  this_week: 'This week',
+  earlier: 'Earlier',
+};
+
+export const groupNotificationsByDate = (
+  notifications: AppNotification[],
+  now = new Date(),
+): NotificationSection[] => {
+  const today = startOfLocalDay(now);
+  const dayMs = 24 * 60 * 60 * 1000;
+  const buckets: Record<NotificationDateGroup, AppNotification[]> = {
+    today: [],
+    yesterday: [],
+    this_week: [],
+    earlier: [],
+  };
+
+  for (const notification of notifications) {
+    const created = new Date(notification.created_at);
+    const day = Number.isNaN(created.getTime()) ? today : startOfLocalDay(created);
+
+    if (day >= today) {
+      buckets.today.push(notification);
+    } else if (day >= today - dayMs) {
+      buckets.yesterday.push(notification);
+    } else if (day >= today - 6 * dayMs) {
+      buckets.this_week.push(notification);
+    } else {
+      buckets.earlier.push(notification);
+    }
+  }
+
+  return (Object.keys(buckets) as NotificationDateGroup[])
+    .filter((key) => buckets[key].length > 0)
+    .map((key) => ({
+      data: buckets[key],
+      key,
+      title: SECTION_TITLES[key],
+    }));
 };

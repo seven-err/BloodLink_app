@@ -7,7 +7,6 @@ import { colors, radii, shadows } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 
 import { AuthBrand } from './AuthBrand';
-import { SecurityFooter } from './SecurityFooter';
 
 export function EmailConfirmedScreen() {
   const { acknowledgeEmailConfirmation, session } = useAuth();
@@ -45,8 +44,6 @@ export function EmailConfirmedScreen() {
         </View>
 
         <PrimaryButton title="Continue to Profile Setup" onPress={acknowledgeEmailConfirmation} />
-
-        <SecurityFooter />
       </View>
     </SafeAreaView>
   );
@@ -106,7 +103,7 @@ const styles = StyleSheet.create({
     width: 76,
   },
   safeArea: {
-    backgroundColor: colors.backgroundTint,
+    backgroundColor: colors.background,
     flex: 1,
   },
   subtitle: {

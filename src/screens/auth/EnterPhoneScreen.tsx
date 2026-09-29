@@ -11,19 +11,18 @@ import { colors } from '@/constants/theme';
 import { useGoogleSignIn } from '@/hooks/useGoogleSignIn';
 import type { AuthStackParamList } from '@/navigation/types';
 import { requestPhoneOtp } from '@/services/supabase/auth';
-import { normalizePhoneNumber } from '@/utils/phone';
+import { normalizePhoneNumber, PH_MOBILE_PLACEHOLDER, philippineMobileSchema } from '@/utils/phone';
 import { AuthBackButton } from './AuthBackButton';
 import { AuthBrand } from './AuthBrand';
 import { AuthDivider } from './AuthDivider';
 import { AuthIcon, SocialIcon } from './icons';
-import { SecurityFooter } from './SecurityFooter';
 import { SocialButton } from './SocialButton';
 import { authStyles } from './styles';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'EnterPhone'>;
 
 const schema = z.object({
-  phone: z.string().min(10, 'Enter a valid phone number.'),
+  phone: philippineMobileSchema,
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -93,7 +92,7 @@ export function EnterPhoneScreen({ navigation, route }: Props) {
             {route.params.mode === 'signup' ? 'Sign up with phone' : 'Continue with phone'}
           </Text>
           <Text style={authStyles.subtitle}>
-            Enter your mobile number and we&apos;ll send a one-time verification code.
+            Enter your Philippine mobile number and we&apos;ll send a one-time verification code.
           </Text>
         </View>
         <View style={styles.socials}>
@@ -119,7 +118,7 @@ export function EnterPhoneScreen({ navigation, route }: Props) {
                 leftIcon={<AuthIcon name="phone" />}
                 onBlur={onBlur}
                 onChangeText={onChange}
-                placeholder="0917 123 4567"
+                placeholder={PH_MOBILE_PLACEHOLDER}
                 value={value}
               />
             )}
@@ -141,7 +140,6 @@ export function EnterPhoneScreen({ navigation, route }: Props) {
             }
           />
         </View>
-        <SecurityFooter />
       </ScrollView>
     </KeyboardAvoidingView>
   );

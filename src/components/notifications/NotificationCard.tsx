@@ -14,62 +14,75 @@ export function NotificationCard({ notification, onPress }: NotificationCardProp
   const visual = getNotificationVisual(notification);
   const isUnread = notification.read_at === null;
   const Icon = visual.Icon;
+  const timeLabel = formatRelativeTime(notification.created_at);
 
   return (
     <Pressable
+      accessibilityLabel={`${isUnread ? 'Unread. ' : ''}${notification.title}. ${visual.label}. ${timeLabel}`}
       accessibilityRole="button"
       style={({ pressed }) => [
         styles.card,
-        visual.isHighPriority ? styles.cardPriority : styles.cardStandard,
         isUnread && !visual.isHighPriority ? styles.cardUnread : null,
+        visual.isHighPriority ? styles.cardPriority : null,
         pressed ? styles.cardPressed : null,
       ]}
       onPress={onPress}
     >
-      <View style={styles.topRow}>
-        <View style={[styles.iconWrap, { backgroundColor: visual.iconBackground }]}>
-          <Icon color={visual.iconColor} size={18} />
-        </View>
-        <View style={styles.copy}>
-          <View style={styles.titleRow}>
-            <Text style={styles.title}>{notification.title}</Text>
-            <Text style={styles.time}>{formatRelativeTime(notification.created_at)}</Text>
-          </View>
-          <Text style={styles.body}>{notification.body}</Text>
-        </View>
+      <View style={[styles.iconWrap, { backgroundColor: visual.iconBackground }]}>
+        <Icon color={visual.iconColor} size={18} />
       </View>
 
-      {visual.isHighPriority ? (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>High Priority</Text>
+      <View style={styles.copy}>
+        <View style={styles.titleRow}>
+          <Text numberOfLines={2} style={styles.title}>
+            {notification.title}
+          </Text>
+          {isUnread ? <View style={styles.unreadDot} /> : null}
         </View>
-      ) : null}
+
+        <View style={styles.metaRow}>
+          <Text style={styles.meta}>{visual.label}</Text>
+          <Text style={styles.metaSeparator}>·</Text>
+          <Text style={styles.meta}>{timeLabel}</Text>
+          {visual.isHighPriority ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>High priority</Text>
+            </View>
+          ) : null}
+        </View>
+
+        <Text style={styles.body}>{notification.body}</Text>
+      </View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   badge: {
-    alignSelf: 'flex-start',
     backgroundColor: colors.primarySoft,
     borderRadius: radii.pill,
-    marginLeft: 52,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    marginLeft: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
   },
   badgeText: {
     color: colors.primary,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
   body: {
-    color: colors.mutedLight,
+    color: colors.muted,
     fontSize: 14,
     lineHeight: 20,
   },
   card: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
     borderRadius: radii.card,
-    gap: 10,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
     padding: 16,
     ...shadows.card,
   },
@@ -77,17 +90,17 @@ const styles = StyleSheet.create({
     opacity: 0.94,
   },
   cardPriority: {
-    backgroundColor: colors.primaryTint,
-  },
-  cardStandard: {
-    backgroundColor: colors.card,
+    borderLeftColor: colors.primary,
+    borderLeftWidth: 3,
   },
   cardUnread: {
-    backgroundColor: colors.backgroundTint,
+    borderLeftColor: colors.info,
+    borderLeftWidth: 3,
   },
   copy: {
     flex: 1,
     gap: 6,
+    minWidth: 0,
   },
   iconWrap: {
     alignItems: 'center',
@@ -96,10 +109,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 40,
   },
-  time: {
+  meta: {
     color: colors.mutedLight,
     fontSize: 12,
-    marginLeft: 8,
+    fontWeight: '600',
+  },
+  metaRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  metaSeparator: {
+    color: colors.border,
+    fontSize: 12,
+    fontWeight: '700',
   },
   title: {
     color: colors.foreground,
@@ -110,10 +134,13 @@ const styles = StyleSheet.create({
   titleRow: {
     alignItems: 'flex-start',
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 8,
   },
-  topRow: {
-    flexDirection: 'row',
-    gap: 12,
+  unreadDot: {
+    backgroundColor: colors.info,
+    borderRadius: 999,
+    height: 8,
+    marginTop: 5,
+    width: 8,
   },
 });

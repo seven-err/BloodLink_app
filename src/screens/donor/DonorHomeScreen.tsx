@@ -385,7 +385,7 @@ export function DonorHomeScreen({ navigation }: Props) {
             onPress={() => navigation.navigate('Requests')}
           >
             <Text style={donorHomeStyles.linkText}>All ({requests.length})</Text>
-            <ChevronRight color={colors.primary} size={14} />
+            <ChevronRight color={colors.muted} size={14} />
           </Pressable>
         </View>
 
@@ -408,25 +408,17 @@ export function DonorHomeScreen({ navigation }: Props) {
                 title={request.hospital_name || request.title}
                 unitsNeeded={request.units_needed}
                 urgency={request.urgency}
-                onCall={() =>
-                  navigation
-                    .getParent()
-                    ?.navigate('DonorRequestDetail', { requestId: request.id })
-                }
-                onChat={() =>
-                  navigation
-                    .getParent()
-                    ?.navigate('DonorRequestDetail', { requestId: request.id })
-                }
+                onChat={() => navigation.navigate('Chat')}
                 onDetails={() =>
                   navigation
                     .getParent()
                     ?.navigate('DonorRequestDetail', { requestId: request.id })
                 }
                 onRespond={() =>
-                  navigation
-                    .getParent()
-                    ?.navigate('DonorRequestDetail', { requestId: request.id })
+                  navigation.getParent()?.navigate('DonorRequestDetail', {
+                    requestId: request.id,
+                    intent: 'respond',
+                  })
                 }
               />
             ))
@@ -442,7 +434,7 @@ export function DonorHomeScreen({ navigation }: Props) {
             onPress={() => navigation.navigate('Map')}
           >
             <Text style={donorHomeStyles.linkText}>View Map</Text>
-            <ChevronRight color={colors.primary} size={14} />
+            <ChevronRight color={colors.muted} size={14} />
           </Pressable>
         </View>
 
@@ -463,7 +455,12 @@ export function DonorHomeScreen({ navigation }: Props) {
                 name={donor.fullName}
                 timeLabel={formatLastDonationLabel(donor.lastDonationAt).replace('Last donation: ', '')}
                 onDetails={() => navigation.getParent()?.navigate('NearbyDonorDetail', { donor })}
-                onRequest={() => navigation.getParent()?.navigate('NearbyDonorDetail', { donor })}
+                onRequest={() =>
+                  navigation.getParent()?.navigate(
+                    'CreateBloodRequest',
+                    profile?.blood_type ? { bloodType: profile.blood_type } : undefined,
+                  )
+                }
               />
             ))
           )}

@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { colors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { EmailConfirmedScreen } from '@/screens/auth/EmailConfirmedScreen';
+import { ResetPasswordScreen } from '@/screens/auth/ResetPasswordScreen';
 import { AuthProfileErrorScreen } from '@/screens/AuthProfileErrorScreen';
 import { RestrictedAccessScreen } from '@/screens/RestrictedAccessScreen';
 import { isAdminRole, isBloodbankRole, isMobileAppRole } from '@/utils/roles';
@@ -34,7 +35,7 @@ function loadProfileSetupNavigator() {
 function BootSplash() {
   return (
     <View style={styles.boot}>
-      <ActivityIndicator color={colors.primary} size="large" />
+      <ActivityIndicator color={colors.muted} size="large" />
     </View>
   );
 }
@@ -45,6 +46,7 @@ export function RootNavigator() {
     bloodbankVerification,
     emailJustConfirmed,
     initializing,
+    passwordRecovery,
     profile,
     profileComplete,
     profileLoading,
@@ -64,6 +66,10 @@ export function RootNavigator() {
   const showProfileSetup = Boolean(
     session && profile && !profileComplete && isMobileAppRole(profile.role),
   );
+
+  if (session && passwordRecovery) {
+    return <ResetPasswordScreen />;
+  }
 
   if (authError) {
     return <AuthProfileErrorScreen />;

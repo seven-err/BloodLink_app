@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
@@ -24,12 +24,15 @@ import {
   type DonorMatch,
   type MatchedBloodRequestDetails,
 } from '@/services/supabase/donorMatches';
+import { isOwnBloodRequest } from '@/services/supabase/bloodRequests';
 import { resolveConversationRouteParams } from '@/services/supabase/messages';
 import { isQrEligibleMatchStatus } from '@/services/supabase/donations';
 import {
   getOpenBloodRequestById,
   type OpenBloodRequestFeedItem,
 } from '@/services/supabase/openBloodRequestsFeed';
+import { haversineDistanceMeters } from '@/utils/coordinates';
+import { formatDistance } from '@/utils/travelMetrics';
 import {
   subscribeToDonorMatches,
   subscribeToRequestMatches,
@@ -87,7 +90,12 @@ function DetailRow({
   isLast?: boolean;
 }) {
   return (
-    <View style={{ gap: 4, marginBottom: isLast ? 0 : 4 }}>
+    <View
+      style={[
+        recipientStyles.detailRow,
+        isLast ? recipientStyles.detailRowLast : null,
+      ]}
+    >
       <Text style={recipientStyles.detailLabel}>{label}</Text>
       <Text style={recipientStyles.detailValue}>{value}</Text>
     </View>
@@ -110,7 +118,7 @@ function ResponseStatusCard({
   if (responseState === 'responding') {
     return (
       <View style={recipientStyles.card}>
-        <ActivityIndicator color={colors.primaryDark} />
+        <ActivityIndicator color={colors.muted} />
         <Text style={recipientStyles.subtitle}>Submitting your response…</Text>
       </View>
     );
@@ -155,6 +163,20 @@ function ResponseStatusCard({
   return null;
 }
 
+function OwnRequestCard({ onManage }: { onManage: () => void }) {
+  return (
+    <View style={recipientStyles.card}>
+      <Text style={recipientStyles.eyebrow}>Your request</Text>
+      <Text style={recipientStyles.title}>You created this request</Text>
+      <Text style={recipientStyles.subtitle}>
+        Donors cannot donate to or chat on their own blood request. Manage it from Request mode
+        instead.
+      </Text>
+      <PrimaryButton title="Manage this request" onPress={onManage} />
+    </View>
+  );
+}
+
 function SensitiveDetailsCard({ details }: { details: MatchedBloodRequestDetails }) {
   return (
     <View style={recipientStyles.sectionWrapper}>
@@ -181,7 +203,9 @@ import { appCache } from '@/utils/appCache';
 
 export function DonorRequestDetailScreen({ navigation, route }: Props) {
   const { top: topInset } = useSafeAreaInsets();
-  const { requestId } = route.params;
+  const { requestId, intent } = route.params;
+  const respondOnOpenRef = useRef(intent === 'respond');
+  const didAutoRespond = useRef(false);
   const { session, profile } = useAuth();
   const donorId = session?.user.id;
 
@@ -206,6 +230,8 @@ export function DonorRequestDetailScreen({ navigation, route }: Props) {
   const [responseError, setResponseError] = useState<string | null>(null);
   const [chatError, setChatError] = useState<string | null>(null);
   const [openingChat, setOpeningChat] = useState(false);
+  const [isOwnRequest, setIsOwnRequest] = useState(false);
+  const [autoRespondReady, setAutoRespondReady] = useState(false);
 
   const loadRequest = useCallback(async (isSilent = false) => {
     if (!donorId) {
@@ -222,9 +248,11 @@ export function DonorRequestDetailScreen({ navigation, route }: Props) {
     const [
       { data: feedItem, error: feedError },
       { data: donorMatch, error: matchError },
+      ownRequest,
     ] = await Promise.all([
       getOpenBloodRequestById(requestId),
       getDonorMatchForRequest(requestId, donorId),
+      isOwnBloodRequest(requestId, donorId),
     ]);
 
     if (feedError) {
@@ -250,8 +278,17 @@ export function DonorRequestDetailScreen({ navigation, route }: Props) {
     }
 
     setExistingMatch(donorMatch);
+    setIsOwnRequest(ownRequest);
     if (donorMatch) {
       appCache.setSync(`donor_match:${requestId}:${donorId}`, donorMatch);
+    }
+
+    if (ownRequest) {
+      const { data: ownedDetails } = await getAuthorizedBloodRequestById(requestId);
+      setRequest(ownedDetails ? toFeedPreview(ownedDetails) : feedItem);
+      setMatchedDetails(null);
+      setLoading(false);
+      return;
     }
 
     if (!feedItem && !donorMatch && !initialRequest) {
@@ -285,6 +322,9 @@ export function DonorRequestDetailScreen({ navigation, route }: Props) {
       appCache.setSync(`request:detail:${requestId}`, nextRequest);
     }
     setMatchedDetails(nextMatchedDetails);
+    if (respondOnOpenRef.current && !ownRequest && !donorMatch && nextRequest) {
+      setAutoRespondReady(true);
+    }
     setLoading(false);
   }, [donorId, initialRequest, requestId]);
 
@@ -312,6 +352,11 @@ export function DonorRequestDetailScreen({ navigation, route }: Props) {
   );
 
   const openMatchChat = useCallback(async () => {
+    if (isOwnRequest) {
+      setChatError('You cannot chat on your own blood request.');
+      return;
+    }
+
     if (!donorId || !existingMatch) {
       setChatError('You must be signed in to open this conversation.');
       return;
@@ -339,9 +384,15 @@ export function DonorRequestDetailScreen({ navigation, route }: Props) {
       recipientDisplayName: result.recipientDisplayName,
       recipientId: result.recipientId,
     });
-  }, [donorId, existingMatch, navigation, requestId]);
+  }, [donorId, existingMatch, isOwnRequest, navigation, requestId]);
 
   const handleRespond = useCallback(async () => {
+    if (isOwnRequest) {
+      setResponseError('You cannot donate to your own blood request.');
+      setResponseState('error');
+      return;
+    }
+
     if (!donorId || !request) {
       setResponseError('You must be signed in to respond to this request.');
       setResponseState('error');
@@ -372,10 +423,38 @@ export function DonorRequestDetailScreen({ navigation, route }: Props) {
     }
 
     setResponseState('success');
-  }, [donorId, profile?.latitude, profile?.longitude, request, requestId]);
+  }, [donorId, isOwnRequest, profile?.latitude, profile?.longitude, request, requestId]);
 
-  const hasResponded = Boolean(existingMatch);
-  const showRespondButton = !hasResponded && responseState !== 'success';
+  useEffect(() => {
+    if (!autoRespondReady || didAutoRespond.current || !request || !donorId) {
+      return;
+    }
+
+    didAutoRespond.current = true;
+    void handleRespond();
+  }, [autoRespondReady, donorId, handleRespond, request]);
+
+  const distanceLabel = useMemo(() => {
+    if (
+      !request ||
+      profile?.latitude == null ||
+      profile?.longitude == null ||
+      request.latitude == null ||
+      request.longitude == null
+    ) {
+      return null;
+    }
+
+    return formatDistance(
+      haversineDistanceMeters(
+        { latitude: profile.latitude, longitude: profile.longitude },
+        { latitude: request.latitude, longitude: request.longitude },
+      ),
+    );
+  }, [profile?.latitude, profile?.longitude, request]);
+
+  const hasResponded = Boolean(existingMatch) && !isOwnRequest;
+  const showRespondButton = !isOwnRequest && !hasResponded && responseState !== 'success';
   const showStatusCard =
     responseState === 'responding' ||
     responseState === 'success' ||
@@ -438,9 +517,15 @@ export function DonorRequestDetailScreen({ navigation, route }: Props) {
           />
         ) : null}
 
+        {isOwnRequest ? (
+          <OwnRequestCard
+            onManage={() => navigation.navigate('BloodRequestDetail', { requestId })}
+          />
+        ) : null}
+
         {matchedDetails ? <SensitiveDetailsCard details={matchedDetails} /> : null}
 
-        {existingMatch && isQrEligibleMatchStatus(existingMatch.status) ? (
+        {!isOwnRequest && existingMatch && isQrEligibleMatchStatus(existingMatch.status) ? (
           <>
             <PrimaryButton
               title="Open secure chat"
@@ -449,7 +534,7 @@ export function DonorRequestDetailScreen({ navigation, route }: Props) {
             />
             {chatError ? <Text style={authStyles.error}>{chatError}</Text> : null}
             <PrimaryButton
-              title="View donation QR"
+              title="Show QR for staff verification"
               variant="secondary"
               onPress={() =>
                 navigation.navigate('DonationQr', {
@@ -474,7 +559,7 @@ export function DonorRequestDetailScreen({ navigation, route }: Props) {
   }
 
   return (
-    <>
+    <View style={recipientStyles.screen}>
       {/* Inline header with back button */}
       <View
         style={{
@@ -505,7 +590,7 @@ export function DonorRequestDetailScreen({ navigation, route }: Props) {
             fontWeight: '800',
           }}
         >
-          Request Preview
+          Request Details
         </Text>
       </View>
 
@@ -523,11 +608,11 @@ export function DonorRequestDetailScreen({ navigation, route }: Props) {
 
                 {/* Hospital & Meta */}
                 <View style={{ flex: 1, gap: 2 }}>
-                  <Text numberOfLines={1} style={{ color: '#0F172A', fontFamily: fontFamilies.textBold, fontSize: 13.5, fontWeight: '700' }}>
+                  <Text numberOfLines={1} style={{ color: colors.foreground, fontFamily: fontFamilies.textBold, fontSize: 13.5, fontWeight: '700' }}>
                     {request.hospital_name?.trim() || 'Hospital not provided'}
                   </Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={{ color: '#64748B', fontFamily: fontFamilies.textSemibold, fontSize: 11, fontWeight: '600' }}>
+                    <Text style={{ color: colors.muted, fontFamily: fontFamilies.textSemibold, fontSize: 11, fontWeight: '600' }}>
                       {request.units_needed} {request.units_needed === 1 ? 'Unit' : 'Units'} Needed
                     </Text>
                   </View>
@@ -547,9 +632,14 @@ export function DonorRequestDetailScreen({ navigation, route }: Props) {
             </View>
 
             <View style={recipientStyles.detailGrid}>
+              <DetailRow
+                label="Units"
+                value={`${request.units_needed} ${request.units_needed === 1 ? 'unit' : 'units'}`}
+              />
               <DetailRow label="Needed By" value={formatDateTime(request.needed_at)} />
+              {distanceLabel ? <DetailRow label="Distance" value={distanceLabel} /> : null}
               {request.address?.trim() ? (
-                <DetailRow label="Address" value={request.address.trim()} />
+                <DetailRow label="Hospital address" value={request.address.trim()} />
               ) : null}
               <DetailRow label="Posted" value={formatDateTime(request.created_at)} isLast />
             </View>
@@ -572,9 +662,15 @@ export function DonorRequestDetailScreen({ navigation, route }: Props) {
         />
       ) : null}
 
+      {isOwnRequest ? (
+        <OwnRequestCard
+          onManage={() => navigation.navigate('BloodRequestDetail', { requestId })}
+        />
+      ) : null}
+
       {matchedDetails ? <SensitiveDetailsCard details={matchedDetails} /> : null}
 
-      {existingMatch && isQrEligibleMatchStatus(existingMatch.status) ? (
+      {!isOwnRequest && existingMatch && isQrEligibleMatchStatus(existingMatch.status) ? (
         <>
           <PrimaryButton
             title="Open secure chat"
@@ -583,7 +679,7 @@ export function DonorRequestDetailScreen({ navigation, route }: Props) {
           />
           {chatError ? <Text style={authStyles.error}>{chatError}</Text> : null}
           <PrimaryButton
-            title="View donation QR"
+            title="Show QR for staff verification"
             variant="secondary"
             onPress={() =>
               navigation.navigate('DonationQr', {
@@ -599,6 +695,7 @@ export function DonorRequestDetailScreen({ navigation, route }: Props) {
       {showRespondButton ? (
         <PrimaryButton
           title={responseState === 'error' ? 'Try again' : 'Respond to request'}
+          variant="donate"
           loading={responseState === 'responding'}
           onPress={() => void handleRespond()}
         />
@@ -610,6 +707,6 @@ export function DonorRequestDetailScreen({ navigation, route }: Props) {
         onPress={() => navigation.navigate('AppTabs', { screen: 'Requests' })}
       />
       </ScrollView>
-    </>
+    </View>
   );
 }

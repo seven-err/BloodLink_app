@@ -29,7 +29,7 @@ export function AppTabNavigator() {
         headerStyle: {
           backgroundColor: colors.card,
         },
-        headerTintColor: colors.primaryDark,
+        headerTintColor: colors.foreground,
         lazy: true,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedLight,

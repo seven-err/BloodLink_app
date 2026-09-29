@@ -1,0 +1,2 @@
+-- Historical remote migration placeholder only.
+-- Temporary fixture cleanup has no durable local schema to reproduce.

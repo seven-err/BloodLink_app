@@ -82,7 +82,7 @@ export const buildMapLibreMapHtml = (
         align-items: center;
         justify-content: center;
         padding: 4px 8px;
-        background: #dc2626;
+        background: #64748b;
         color: #ffffff;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         font-weight: 800;
@@ -98,7 +98,7 @@ export const buildMapLibreMapHtml = (
         height: 0;
         border-left: 5px solid transparent;
         border-right: 5px solid transparent;
-        border-top: 5px solid #dc2626;
+        border-top: 5px solid #64748b;
         margin-top: -1px;
       }
       .custom-donor-popup .maplibregl-popup-content {
@@ -150,7 +150,7 @@ export const buildMapLibreMapHtml = (
       .donor-popup-hint {
         font-size: 10px;
         font-weight: 600;
-        color: #dc2626;
+        color: #64748b;
         margin-top: 3px;
       }
       .user-location {
@@ -240,7 +240,7 @@ export const buildMapLibreMapHtml = (
       window.__bloodlinkMarkers = [];
 
       markers.forEach(function(marker) {
-        const defaultColor = marker.pinColor || '#dc2626';
+        const defaultColor = marker.pinColor || '#64748b';
         const activeColor = marker.selectedPinColor || '#b91c1c';
         const color = marker.selected ? activeColor : defaultColor;
 
@@ -355,7 +355,7 @@ export const buildMapLibreMapHtml = (
           if (m.marker.selected === isSelected) return;
           m.marker.selected = isSelected;
 
-          const defaultColor = m.marker.pinColor || '#dc2626';
+          const defaultColor = m.marker.pinColor || '#64748b';
           const activeColor = m.marker.selectedPinColor || '#b91c1c';
           const color = isSelected ? activeColor : defaultColor;
 

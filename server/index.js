@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const cors = require('cors');
 const express = require('express');
 const nodemailer = require('nodemailer');
+const { handleHemieApiChat } = require('./hemieApiChat');
 const {
   generateHemieReply,
   getLlmConfig,
@@ -287,6 +288,47 @@ function createApp({
       console.error('Hemie chat failed:', error);
       return res.status(500).json({
         message: 'Hemie is temporarily unavailable. Please try again.',
+      });
+    }
+  });
+
+  app.post('/api/chat', createRateLimiter(hemieRateLimit), async (req, res) => {
+    const authorization = req.get('authorization') || '';
+    const accessToken = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+
+    if (!accessToken) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required.',
+      });
+    }
+
+    let user;
+
+    try {
+      user = await verifySupabaseAccessToken(accessToken);
+    } catch (error) {
+      const status = Number(error?.status) || 401;
+      return res.status(status === 401 ? 401 : 503).json({
+        success: false,
+        message:
+          status === 401
+            ? 'Authentication required.'
+            : 'Sorry, Hemie is temporarily unavailable. Please try again later.',
+      });
+    }
+
+    try {
+      const result = await handleHemieApiChat({
+        body: req.body,
+        userId: user.id,
+      });
+      return res.status(result.status).json(result.body);
+    } catch (error) {
+      console.error('Hemie API chat failed:', error?.name || 'Error');
+      return res.status(503).json({
+        success: false,
+        message: 'Sorry, Hemie is temporarily unavailable. Please try again later.',
       });
     }
   });

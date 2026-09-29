@@ -1,0 +1,2 @@
+-- Historical remote migration placeholder only.
+-- The canonical local emergency-alert definition is carried at 20260916200529.

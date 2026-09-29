@@ -10,6 +10,7 @@ import {
   useState,
 } from 'react';
 
+import { animateModeHighlight, snapModeHighlight } from '@/components/common/modeSwitchMotion';
 import { useAuth } from '@/context/AuthContext';
 import type { Profile } from '@/services/supabase/profiles';
 
@@ -42,6 +43,7 @@ export function UserModeProvider({ children }: PropsWithChildren) {
   const storageKey = getStorageKey(userId);
   const [mode, setModeState] = useState<UserMode>('donate');
   const [hydrated, setHydrated] = useState(false);
+  const userSwitchRef = useRef(false);
   const hasStoredPreferenceRef = useRef(false);
 
   useEffect(() => {
@@ -89,13 +91,39 @@ export function UserModeProvider({ children }: PropsWithChildren) {
     setModeState(getDefaultMode(profile));
   }, [hydrated, profile]);
 
+  useEffect(() => {
+    if (profile?.role === 'recipient' && mode === 'donate') {
+      setModeState('request');
+    }
+  }, [mode, profile?.role]);
+
+  useEffect(() => {
+    if (userSwitchRef.current) {
+      userSwitchRef.current = false;
+      return;
+    }
+
+    snapModeHighlight(mode);
+  }, [mode]);
+
   const setMode = useCallback(
     (nextMode: UserMode) => {
+      // Recipients do not get donor features until they apply as a donor.
+      if (profile?.role === 'recipient' && nextMode === 'donate') {
+        return;
+      }
+
+      if (nextMode === mode) {
+        return;
+      }
+
       hasStoredPreferenceRef.current = true;
+      userSwitchRef.current = true;
+      animateModeHighlight(nextMode);
       setModeState(nextMode);
       void AsyncStorage.setItem(storageKey, nextMode);
     },
-    [storageKey],
+    [mode, profile?.role, storageKey],
   );
 
   const value = useMemo(

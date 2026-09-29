@@ -174,9 +174,9 @@ export function ProfilePictureScreen({ navigation }: Props) {
             onPress={() => void pickImage()}
           >
             {picking ? (
-              <ActivityIndicator color={colors.primary} size="small" />
+              <ActivityIndicator color={colors.foreground} size="small" />
             ) : (
-              <ImagePlus color={colors.primary} size={20} />
+              <ImagePlus color={colors.foreground} size={20} />
             )}
             <Text style={editProfileStyles.profilePictureActionText}>
               {hasExistingAvatar || hasPendingChange ? 'Choose a different photo' : 'Choose photo'}

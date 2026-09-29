@@ -30,6 +30,12 @@ export const createBloodRequestStyles = StyleSheet.create({
   bloodTypeTextSelected: {
     color: colors.primary,
   },
+  cooldownText: {
+    color: colors.warningText,
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
   errorText: {
     color: colors.primary,
     fontSize: 13,
@@ -273,7 +279,7 @@ export const createBloodRequestStyles = StyleSheet.create({
     width: '47.5%',
   },
   urgencyOptionCriticalSelected: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.criticalSoft,
     borderColor: colors.border,
   },
   urgencyOptionHighSelected: {
@@ -294,7 +300,7 @@ export const createBloodRequestStyles = StyleSheet.create({
     fontWeight: '700',
   },
   urgencyTextCriticalSelected: {
-    color: colors.primary,
+    color: colors.critical,
   },
   urgencyTextHighSelected: {
     color: colors.orangeText,

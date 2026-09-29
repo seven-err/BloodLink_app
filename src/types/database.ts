@@ -63,6 +63,12 @@ export type ReportType =
   | 'donation'
   | 'system';
 
+export type ReportModerationActionType =
+  | 'review'
+  | 'resolve'
+  | 'dismiss'
+  | 'warn';
+
 export type AnalyticsEventType =
   | 'screen_view'
   | 'auth'
@@ -71,6 +77,10 @@ export type AnalyticsEventType =
   | 'matching'
   | 'notification'
   | 'system';
+
+export type InventoryStockStatus = 'stable' | 'low' | 'critical';
+
+export type DonorPreScreeningStatus = 'completed' | 'reviewed';
 
 export type Json =
   | string
@@ -101,6 +111,7 @@ export type Database = {
           address: string | null;
           is_available: boolean;
           visible_on_map: boolean;
+          onboarding_completed: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -120,6 +131,7 @@ export type Database = {
           address?: string | null;
           is_available?: boolean;
           visible_on_map?: boolean;
+          onboarding_completed?: boolean;
         };
         Update: Partial<Database['public']['Tables']['profiles']['Insert']>;
         Relationships: [];
@@ -150,6 +162,50 @@ export type Database = {
         Update: Partial<
           Database['public']['Tables']['donor_verifications']['Insert']
         >;
+        Relationships: [];
+      };
+      donor_pre_screenings: {
+        Row: {
+          id: string;
+          donor_id: string;
+          questionnaire_version: string;
+          responses: Json;
+          requires_staff_review: boolean;
+          acknowledged_at: string;
+          completed_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          donor_id: string;
+          questionnaire_version: string;
+          responses: Json;
+          requires_staff_review?: boolean;
+          acknowledged_at?: string;
+          completed_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['donor_pre_screenings']['Insert']>;
+        Relationships: [];
+      };
+      donor_pre_screening_reviews: {
+        Row: {
+          id: string;
+          pre_screening_id: string;
+          donation_id: string;
+          reviewer_id: string;
+          review_status: 'reviewed';
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          pre_screening_id: string;
+          donation_id: string;
+          reviewer_id: string;
+          review_status?: 'reviewed';
+          notes?: string | null;
+        };
+        Update: never;
         Relationships: [];
       };
       bloodbank_verifications: {
@@ -263,6 +319,7 @@ export type Database = {
           match_id: string;
           donor_id: string;
           request_id: string;
+          bloodbank_id: string | null;
           status: DonationStatus;
           scheduled_at: string | null;
           completed_at: string | null;
@@ -277,6 +334,7 @@ export type Database = {
           match_id: string;
           donor_id: string;
           request_id: string;
+          bloodbank_id?: string | null;
           status?: DonationStatus;
           scheduled_at?: string | null;
           completed_at?: string | null;
@@ -316,6 +374,7 @@ export type Database = {
           push_enabled: boolean;
           emergency_alerts: boolean;
           message_notifications: boolean;
+          sms_enabled: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -324,6 +383,7 @@ export type Database = {
           push_enabled?: boolean;
           emergency_alerts?: boolean;
           message_notifications?: boolean;
+          sms_enabled?: boolean;
         };
         Update: Partial<
           Database['public']['Tables']['notification_preferences']['Insert']
@@ -372,6 +432,22 @@ export type Database = {
           read_at?: string | null;
         };
         Update: Partial<Database['public']['Tables']['messages']['Insert']>;
+        Relationships: [];
+      };
+      conversation_states: {
+        Row: {
+          user_id: string;
+          donor_match_id: string;
+          status: 'active' | 'archived' | 'deleted';
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          donor_match_id: string;
+          status: 'active' | 'archived' | 'deleted';
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['conversation_states']['Insert']>;
         Relationships: [];
       };
       availability: {
@@ -458,6 +534,32 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['reports']['Insert']>;
         Relationships: [];
       };
+      report_moderation_actions: {
+        Row: {
+          id: string;
+          report_id: string;
+          actor_id: string;
+          action: ReportModerationActionType;
+          previous_status: ReportStatus;
+          resulting_status: ReportStatus;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          report_id: string;
+          actor_id: string;
+          action: ReportModerationActionType;
+          previous_status: ReportStatus;
+          resulting_status: ReportStatus;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database['public']['Tables']['report_moderation_actions']['Insert']
+        >;
+        Relationships: [];
+      };
       analytics: {
         Row: {
           id: string;
@@ -477,6 +579,54 @@ export type Database = {
           occurred_at?: string;
         };
         Update: Partial<Database['public']['Tables']['analytics']['Insert']>;
+        Relationships: [];
+      };
+      blood_inventory: {
+        Row: {
+          id: string;
+          bloodbank_id: string;
+          blood_type: BloodType;
+          quantity: number;
+          low_threshold: number;
+          critical_threshold: number;
+          stock_status: InventoryStockStatus;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          bloodbank_id: string;
+          blood_type: BloodType;
+          quantity?: number;
+          low_threshold?: number;
+          critical_threshold?: number;
+        };
+        Update: Partial<Database['public']['Tables']['blood_inventory']['Insert']>;
+        Relationships: [];
+      };
+      blood_inventory_adjustments: {
+        Row: {
+          id: string;
+          inventory_id: string;
+          previous_quantity: number;
+          adjustment_amount: number;
+          resulting_quantity: number;
+          reason: string;
+          adjusted_by: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          inventory_id: string;
+          previous_quantity: number;
+          adjustment_amount: number;
+          resulting_quantity: number;
+          reason: string;
+          adjusted_by: string;
+        };
+        Update: Partial<
+          Database['public']['Tables']['blood_inventory_adjustments']['Insert']
+        >;
         Relationships: [];
       };
     };
@@ -515,8 +665,65 @@ export type Database = {
         };
         Relationships: [];
       };
+      conversation_counterparts: {
+        Row: {
+          donor_match_id: string;
+          blood_request_id: string;
+          other_party_id: string;
+          display_name: string;
+          blood_type: BloodType | null;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
+      submit_donor_pre_screening: {
+        Args: {
+          p_questionnaire_version: string;
+          p_responses: Json;
+          p_acknowledged: boolean;
+        };
+        Returns: Database['public']['Tables']['donor_pre_screenings']['Row'];
+      };
+      get_donor_pre_screening_summary: {
+        Args: { p_donation_id: string };
+        Returns: Array<{
+          id: string;
+          donor_id: string;
+          questionnaire_version: string;
+          status: DonorPreScreeningStatus;
+          requires_staff_review: boolean;
+          completed_at: string;
+          review_status: 'reviewed' | null;
+          reviewed_at: string | null;
+        }>;
+      };
+      get_donor_pre_screening_detail: {
+        Args: { p_donation_id: string };
+        Returns: Array<{
+          id: string;
+          donor_id: string;
+          questionnaire_version: string;
+          responses: Json;
+          requires_staff_review: boolean;
+          acknowledged_at: string;
+          completed_at: string;
+          review_status: 'reviewed' | null;
+          review_notes: string | null;
+          reviewed_by: string | null;
+          reviewer_name: string | null;
+          reviewed_at: string | null;
+          review_history: Json;
+        }>;
+      };
+      review_donor_pre_screening: {
+        Args: {
+          p_donation_id: string;
+          p_pre_screening_id: string;
+          p_review_notes?: string | null;
+        };
+        Returns: Database['public']['Tables']['donor_pre_screening_reviews']['Row'];
+      };
       is_admin: {
         Args: {
           user_id?: string;
@@ -528,6 +735,12 @@ export type Database = {
           user_id?: string;
         };
         Returns: boolean;
+      };
+      blood_request_cooldown_remaining_seconds: {
+        Args: {
+          p_requester_id?: string;
+        };
+        Returns: number;
       };
       is_matched_donor_for_request: {
         Args: {
@@ -599,6 +812,159 @@ export type Database = {
         };
         Returns: Json;
       };
+      get_donation_qr_token: {
+        Args: {
+          p_donation_id: string;
+        };
+        Returns: string;
+      };
+      complete_verified_donation: {
+        Args: {
+          p_donation_id: string;
+          p_token: string;
+          p_units_donated?: number;
+          p_notes?: string;
+        };
+        Returns: Json;
+      };
+      set_donor_match_status: {
+        Args: {
+          p_match_id: string;
+          p_status: DonorMatchStatus;
+        };
+        Returns: Database['public']['Tables']['donor_matches']['Row'];
+      };
+      set_blood_request_status: {
+        Args: {
+          p_request_id: string;
+          p_status: BloodRequestStatus;
+        };
+        Returns: Database['public']['Tables']['blood_requests']['Row'];
+      };
+      set_donation_status: {
+        Args: {
+          p_donation_id: string;
+          p_status: DonationStatus;
+        };
+        Returns: Json;
+      };
+      is_bloodbank_verified: {
+        Args: {
+          user_id?: string;
+        };
+        Returns: boolean;
+      };
+      review_bloodbank_verification: {
+        Args: {
+          p_verification_id: string;
+          p_status: BloodbankVerificationStatus;
+          p_notes?: string | null;
+        };
+        Returns: Database['public']['Tables']['bloodbank_verifications']['Row'];
+      };
+      users_share_request_context: {
+        Args: {
+          a: string;
+          b: string;
+        };
+        Returns: boolean;
+      };
+      is_own_blood_request: {
+        Args: {
+          p_request_id: string;
+        };
+        Returns: boolean;
+      };
+      set_conversation_state: {
+        Args: {
+          p_donor_match_id: string;
+          p_status: string;
+        };
+        Returns: undefined;
+      };
+      can_manage_blood_inventory: {
+        Args: {
+          p_bloodbank_id: string;
+        };
+        Returns: boolean;
+      };
+      ensure_blood_inventory: {
+        Args: {
+          p_bloodbank_id: string;
+        };
+        Returns: Database['public']['Tables']['blood_inventory']['Row'][];
+      };
+      adjust_blood_inventory: {
+        Args: {
+          p_bloodbank_id: string;
+          p_blood_type: BloodType;
+          p_delta: number;
+          p_reason: string;
+        };
+        Returns: Database['public']['Tables']['blood_inventory']['Row'];
+      };
+      set_blood_inventory_thresholds: {
+        Args: {
+          p_bloodbank_id: string;
+          p_blood_type: BloodType;
+          p_low_threshold: number;
+          p_critical_threshold: number;
+        };
+        Returns: Database['public']['Tables']['blood_inventory']['Row'];
+      };
+      list_blood_inventory_sites: {
+        Args: Record<string, never>;
+        Returns: {
+          bloodbank_id: string;
+          display_name: string;
+          organization_name: string | null;
+          hospital_name: string | null;
+          branch_location: string | null;
+          address: string | null;
+          latitude: number | null;
+          longitude: number | null;
+          total_units: number;
+          critical_count: number;
+          low_count: number;
+          stable_count: number;
+          stock: Json;
+        }[];
+      };
+      get_blood_inventory_summary: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      get_admin_predictive_analytics: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      submit_report: {
+        Args: {
+          p_type: ReportType;
+          p_reason: string;
+          p_details?: string | null;
+          p_reported_user_id?: string | null;
+          p_blood_request_id?: string | null;
+          p_message_id?: string | null;
+          p_donation_id?: string | null;
+        };
+        Returns: Database['public']['Tables']['reports']['Row'];
+      };
+      review_report: {
+        Args: {
+          p_report_id: string;
+          p_status: ReportStatus;
+          p_notes?: string | null;
+        };
+        Returns: Database['public']['Tables']['reports']['Row'];
+      };
+      warn_reported_user: {
+        Args: {
+          p_report_id: string;
+          p_notes?: string | null;
+        };
+        Returns: Database['public']['Tables']['reports']['Row'];
+      };
     };
     Enums: {
       analytics_event_type: AnalyticsEventType;
@@ -608,8 +974,10 @@ export type Database = {
       donation_status: DonationStatus;
       donor_match_status: DonorMatchStatus;
       donor_verification_status: DonorVerificationStatus;
+      inventory_stock_status: InventoryStockStatus;
       message_status: MessageStatus;
       notification_type: NotificationType;
+      report_moderation_action: ReportModerationActionType;
       report_status: ReportStatus;
       report_type: ReportType;
       user_role: UserRole;

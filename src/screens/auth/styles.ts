@@ -34,7 +34,7 @@ export const authStyles = StyleSheet.create({
     lineHeight: 20,
   },
   link: {
-    color: colors.primaryDark,
+    color: colors.foreground,
     fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',

@@ -9,6 +9,7 @@ import { formatRelativeTime } from '@/utils/relativeTime';
 type ConversationListItemProps = {
   conversation: ConversationPreview;
   onPress: () => void;
+  onLongPress: () => void;
 };
 
 const getInitials = (name: string) => {
@@ -25,13 +26,19 @@ const getInitials = (name: string) => {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 };
 
-export function ConversationListItem({ conversation, onPress }: ConversationListItemProps) {
+export function ConversationListItem({
+  conversation,
+  onPress,
+  onLongPress,
+}: ConversationListItemProps) {
   const hasUnread = conversation.unreadCount > 0;
 
   return (
     <Pressable
+      accessibilityHint="Long press to archive or delete this conversation"
       accessibilityRole="button"
       style={({ pressed }) => [styles.row, pressed ? styles.rowPressed : null]}
+      onLongPress={onLongPress}
       onPress={onPress}
     >
       <ConversationAvatar initials={getInitials(conversation.displayName)} />
@@ -105,7 +112,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   rowPressed: {
-    backgroundColor: colors.backgroundTint,
+    backgroundColor: colors.background,
   },
   snippet: {
     color: colors.mutedLight,
@@ -130,7 +137,7 @@ const styles = StyleSheet.create({
   },
   unreadBadge: {
     alignItems: 'center',
-    backgroundColor: colors.primary,
+    backgroundColor: colors.info,
     borderRadius: 10,
     height: 20,
     justifyContent: 'center',

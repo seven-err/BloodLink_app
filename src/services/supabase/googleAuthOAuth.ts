@@ -1,18 +1,61 @@
 import { makeRedirectUri } from 'expo-auth-session';
+import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 
-import {
-  getOAuthAuthRedirectUrl,
-  parseAuthCodeFromUrl,
-  parseAuthErrorFromUrl,
-  parseAuthTokensFromUrl,
-} from '@/utils/authRedirect';
+import { getOAuthAuthRedirectUrl } from '@/utils/authRedirect';
 
+import { createSessionFromAuthUrl } from './authSessionFromUrl';
 import { supabase } from './client';
 import type { GoogleSignInResult } from './googleAuth.types';
 
 WebBrowser.maybeCompleteAuthSession();
+
+const sessionResultFromCurrentAuth = async (): Promise<GoogleSignInResult | null> => {
+  const { data, error } = await supabase.auth.getSession();
+
+  if (error || !data.session) {
+    return null;
+  }
+
+  return {
+    data: { session: data.session, user: data.session.user },
+    error: null,
+  };
+};
+
+/**
+ * Android Custom Tabs can return "dismiss" while AuthContext is still exchanging
+ * the same PKCE code from the deep link. A used code is success if a session exists.
+ */
+const recoverSessionAfterRedirect = async (
+  previousAccessToken: string | null,
+  timeoutMs = 400,
+): Promise<GoogleSignInResult | null> => {
+  const isNewSession = (result: GoogleSignInResult | null) =>
+    Boolean(result?.data?.session?.access_token) &&
+    result?.data?.session?.access_token !== previousAccessToken;
+
+  const started = Date.now();
+
+  while (Date.now() - started <= timeoutMs) {
+    const current = await sessionResultFromCurrentAuth();
+
+    if (isNewSession(current)) {
+      return current;
+    }
+
+    if (Date.now() - started >= timeoutMs) {
+      break;
+    }
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, 200);
+    });
+  }
+
+  return null;
+};
 
 const getOAuthRedirectUrl = () => {
   if (Platform.OS === 'web') {
@@ -27,6 +70,8 @@ const getOAuthRedirectUrl = () => {
 
 /** Browser-based Google OAuth (web, Expo Go, or builds without native Google Sign-In). */
 export const signInWithGoogleOAuth = async (): Promise<GoogleSignInResult> => {
+  const { data: beforeAuth } = await supabase.auth.getSession();
+  const previousAccessToken = beforeAuth.session?.access_token ?? null;
   const redirectTo = getOAuthRedirectUrl();
 
   if (__DEV__) {
@@ -64,7 +109,12 @@ export const signInWithGoogleOAuth = async (): Promise<GoogleSignInResult> => {
     // Best-effort; auth still works without warm-up.
   }
 
-  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+  // Stay in the same Android task. A new task relaunches the app at Welcome
+  // and drops the in-progress login/signup screen.
+  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo, {
+    createTask: false,
+    showInRecents: false,
+  });
 
   try {
     await WebBrowser.coolDownAsync();
@@ -73,42 +123,60 @@ export const signInWithGoogleOAuth = async (): Promise<GoogleSignInResult> => {
   }
 
   if (result.type === 'cancel' || result.type === 'dismiss') {
+    const fromLaunch = await createSessionFromAuthUrl(await Linking.getInitialURL());
+    const recovered = await recoverSessionAfterRedirect(
+      previousAccessToken,
+      fromLaunch.activated ? 1500 : 600,
+    );
+
+    if (recovered) {
+      return recovered;
+    }
+
+    if (fromLaunch.error) {
+      return { data: null, error: new Error(fromLaunch.error) };
+    }
+
     return { cancelled: true, data: null, error: null };
   }
 
-  if (result.type !== 'success' || !('url' in result) || !result.url) {
-    return { data: null, error: new Error('Google sign-in did not complete.') };
+  if (result.type === 'success' && 'url' in result && result.url) {
+    const created = await createSessionFromAuthUrl(result.url);
+
+    if (created.activated) {
+      const sessionResult = await sessionResultFromCurrentAuth();
+
+      if (sessionResult) {
+        return sessionResult;
+      }
+    }
+
+    const recovered = await recoverSessionAfterRedirect(previousAccessToken);
+
+    if (recovered) {
+      return recovered;
+    }
+
+    if (created.error) {
+      return { data: null, error: new Error(created.error) };
+    }
   }
 
-  const oauthError = parseAuthErrorFromUrl(result.url);
+  const launchUrl = await Linking.getInitialURL();
+  const fromLaunch = await createSessionFromAuthUrl(launchUrl);
 
-  if (oauthError) {
-    return { data: null, error: new Error(oauthError) };
+  if (fromLaunch.activated) {
+    const sessionResult = await sessionResultFromCurrentAuth();
+
+    if (sessionResult && sessionResult.data?.session?.access_token !== previousAccessToken) {
+      return sessionResult;
+    }
   }
 
-  const tokens = parseAuthTokensFromUrl(result.url);
+  const recovered = await recoverSessionAfterRedirect(previousAccessToken);
 
-  if (tokens) {
-    const sessionResult = await supabase.auth.setSession({
-      access_token: tokens.accessToken,
-      refresh_token: tokens.refreshToken,
-    });
-
-    return {
-      data: sessionResult.data,
-      error: sessionResult.error ? new Error(sessionResult.error.message) : null,
-    };
-  }
-
-  const code = parseAuthCodeFromUrl(result.url);
-
-  if (code) {
-    const sessionResult = await supabase.auth.exchangeCodeForSession(code);
-
-    return {
-      data: sessionResult.data,
-      error: sessionResult.error ? new Error(sessionResult.error.message) : null,
-    };
+  if (recovered) {
+    return recovered;
   }
 
   return {

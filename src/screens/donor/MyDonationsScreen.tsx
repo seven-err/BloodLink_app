@@ -30,6 +30,10 @@ import { useAuth } from '@/context/AuthContext';
 import type { AppStackParamList } from '@/navigation/types';
 import { authStyles } from '@/screens/auth/styles';
 import {
+  describeDonationVerification,
+  formatDonationVerificationStatus,
+  isAwaitingDonationVerification,
+  isVerifiedCompletedDonation,
   listDonorVerifiableItems,
   type DonorDonationListItem,
 } from '@/services/supabase/donations';
@@ -64,13 +68,8 @@ const formatDateOnly = (value: string | null) => {
   });
 };
 
-const formatStatusLabel = (item: DonorDonationListItem) => {
-  if (item.donationStatus) {
-    return item.donationStatus.replace('_', ' ');
-  }
-
-  return item.matchStatus;
-};
+const formatStatusLabel = (item: DonorDonationListItem) =>
+  formatDonationVerificationStatus(item.donationStatus, item.matchStatus);
 
 function FullDonationCard({
   item,
@@ -79,8 +78,7 @@ function FullDonationCard({
   item: DonorDonationListItem;
   onPress: () => void;
 }) {
-  const isCompleted =
-    item.donationStatus === 'completed' || item.matchStatus === 'completed';
+  const isCompleted = isVerifiedCompletedDonation(item.donationStatus);
 
   const isCritical = item.urgency === 'critical';
   const isUrgent = item.urgency === 'urgent';
@@ -181,7 +179,7 @@ function FullDonationCard({
           </View>
         ) : item.scheduledAt ? (
           <View style={styles.detailItem}>
-            <Calendar color={colors.primary} size={14} />
+            <Calendar color={colors.muted} size={14} />
             <Text style={styles.detailLabel}>Scheduled For</Text>
             <Text style={styles.detailValue}>{formatDateTime(item.scheduledAt)}</Text>
           </View>
@@ -207,10 +205,16 @@ function FullDonationCard({
         <Text style={styles.refText}>Ref: #{matchRefCode}</Text>
       </View>
 
+      <Text style={styles.refText}>
+        {describeDonationVerification(item.donationStatus, item.matchStatus)}
+      </Text>
+
       <View style={styles.qrActionBtn}>
         <QrCode color={colors.primary} size={16} />
-        <Text style={styles.qrActionText}>Show QR Verification Pass</Text>
-        <ChevronRight color={colors.primary} size={16} />
+        <Text style={styles.qrActionText}>
+          {isCompleted ? 'View verification record' : 'Show QR Verification Pass'}
+        </Text>
+        <ChevronRight color={colors.muted} size={16} />
       </View>
     </Pressable>
   );
@@ -275,31 +279,21 @@ export function MyDonationsScreen({ navigation }: Props) {
   );
 
   const completedCount = useMemo(
-    () =>
-      items.filter(
-        (i) => i.donationStatus === 'completed' || i.matchStatus === 'completed',
-      ).length,
+    () => items.filter((item) => isVerifiedCompletedDonation(item.donationStatus)).length,
     [items],
   );
 
   const activeCount = useMemo(
-    () =>
-      items.filter(
-        (i) => i.donationStatus !== 'completed' && i.matchStatus !== 'completed',
-      ).length,
+    () => items.filter((item) => isAwaitingDonationVerification(item.donationStatus)).length,
     [items],
   );
 
   const filteredItems = useMemo(() => {
     if (activeTab === 'completed') {
-      return items.filter(
-        (i) => i.donationStatus === 'completed' || i.matchStatus === 'completed',
-      );
+      return items.filter((item) => isVerifiedCompletedDonation(item.donationStatus));
     }
     if (activeTab === 'active') {
-      return items.filter(
-        (i) => i.donationStatus !== 'completed' && i.matchStatus !== 'completed',
-      );
+      return items.filter((item) => isAwaitingDonationVerification(item.donationStatus));
     }
     return items;
   }, [activeTab, items]);
@@ -437,7 +431,7 @@ export function MyDonationsScreen({ navigation }: Props) {
       {filteredItems.length === 0 ? (
         <View style={styles.emptyCard}>
           <View style={styles.emptyIconWrap}>
-            <Sparkles color={colors.primary} size={28} />
+            <Sparkles color={colors.muted} size={28} />
           </View>
           <Text style={styles.emptyTitle}>
             {activeTab === 'completed'

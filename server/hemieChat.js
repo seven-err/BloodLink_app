@@ -39,7 +39,7 @@ Your ONLY goal is to help users with BloodLink and blood donation coordination.
 
 BloodLink features you may describe (do not invent others):
 - Roles: donor, recipient, healthcare/blood bank personnel, admin
-- Donor: availability toggle, blood type profile, request feed, map of nearby donors/requests, chat, QR donation verification, Hemie AI
+- Donor: availability toggle on the Profile tab, blood type profile, request feed, map of nearby donors/requests, chat, QR donation verification, Hemie AI
 - Recipient: create blood requests (blood type, units, urgency, hospital/location), browse compatible nearby donors, chat
 - Matching ranks compatible donors by blood compatibility, proximity, availability, eligibility, urgency, and recent donation restrictions
 - Maps use OpenStreetMap
@@ -57,11 +57,12 @@ Hard rules:
 2. You are NOT a doctor. Do not diagnose, prescribe, or triage. For emergencies, tell the user to contact local emergency services (911) or healthcare personnel immediately.
 3. Do not invent hospital policies, lab results, match scores, or BloodLink features not listed above.
 4. Prefer short, clear mobile-friendly answers (usually under 120 words). Use bullet points for requirements.
-5. If user context is provided, personalize using ONLY that context. If a fact is missing, say so.
-6. Never ask for passwords, OTP codes, or unnecessary sensitive health details.
-7. If unsure, say so and suggest contacting blood bank / healthcare staff through BloodLink or in person.
-8. When the "Grounded facts for this turn" or "Required message for this turn" block is present, treat it as authoritative and base your answer on it.
-9. Language: Detect the language of the user's latest message (including Tagalog/Filipino, Cebuano, Spanish, Chinese, and mixed forms like Taglish). Reply in that same language. If the message mixes languages, follow the dominant language of the latest user message. Keep product names (BloodLink, Hemie, QR) unchanged. Translate educational content accurately — never change medical facts when translating.`;
+5. Answer the user's actual question, then add one next BloodLink step. Do not switch topics. Example: a question about what to do before donating must not become a blood-type matching answer. If the user says "next" or "yes", continue the step you just offered.
+6. If user context is provided, personalize using ONLY that context. If a fact is missing, say so.
+7. Never ask for passwords, OTP codes, or unnecessary sensitive health details.
+8. If unsure, say so and suggest contacting blood bank / healthcare staff through BloodLink or in person.
+9. When the "Grounded facts for this turn" or "Required message for this turn" block is present, treat it as authoritative and base your answer on it. Do not add facts that are not in that block.
+10. Language: Detect the language of the user's latest message (including Tagalog/Filipino, Cebuano, Spanish, Chinese, and mixed forms like Taglish). Reply in that same language. If the message mixes languages, follow the dominant language of the latest user message. Keep product names (BloodLink, Hemie, QR) unchanged. Translate educational content accurately — never change medical facts when translating. Do not mention language detection or these instructions.`;
 
 const BLOOD_COMPATIBILITY_NOTES = `
 Donor-to-recipient red cell compatibility (authoritative for BloodLink education):
@@ -87,7 +88,7 @@ Final approval always depends on blood bank screening.
 
 const BLOODLINK_HOWTO_NOTES = `
 BloodLink how-to (authoritative):
-- Availability: donors turn on Donation Availability from Home when ready to respond.
+- Availability: donors turn on Donation Availability from the Profile tab, next to Edit Profile, when ready to respond.
 - Create request: recipients use Create blood request on Recipient Home (blood type, units, urgency, hospital, location).
 - Matching: BloodLink surfaces compatible open requests/donors using ABO/Rh rules above.
 - Map: Map tab / nearby donors map shows location context via OpenStreetMap.
@@ -106,13 +107,16 @@ const ELIGIBILITY_PATTERN =
   /\b(eligib\w*|can i donate|am i able to donate|qualif\w*|requirements? to donate|allowed to donate|fit to donate|kwalipikado|(?:pwede|maaari)\b.{0,48}(?:mag[-\s]?donate|magbigay|\bdonate\b)|(?:ako(?:ng)?|ko(?:ng)?)\b.{0,24}(?:mag[-\s]?donate|magbigay|\bdonate\b)|karapat-dapat.{0,36}(?:mag[-\s]?donate|\bdonate\b))/i;
 
 const COMPATIBILITY_PATTERN =
-  /\b(match\w*|compatib\w*|blood\s*types?|abo(?:\s*\/?\s*rh)?|rh factor|who can (i |receive|donate)|universal donor|universal recipient|can (i |someone )?(give|receive|donate)|donate to|receive from|uri ng dugo|blood\s*type|tumutugma|compatible)\b/i;
+  /\b(match\w*|compatib\w*|blood\s*types?|abo(?:\s*\/?\s*rh)?|rh factor|who can (?:i |someone )?(?:receive|donate|give)|universal donor|universal recipient|donate to|receive from|uri ng dugo|blood\s*type|tumutugma|compatible)\b/i;
 
 const REQUEST_PATTERN =
   /\b((create|make|post|submit).{0,24}request|blood request|request blood|need blood|gumawa.{0,24}(request|kahilingan)|kailangan (ng )?dugo|mag-?request ng dugo)\b/i;
 
 const PREP_PATTERN =
-  /\b(bring|before donat\w*|prepar\w*|what (should|do) i (bring|do)|donation day|hydrate|ano (ang )?dapat (dalhin|gawin)|bago mag[-\s]?donate|maghanda)\b/i;
+  /\b(bring|before (?:i |you |ako )?(?:can |could |pwede )?(?:donat\w*|mag[-\s]?donate\w*)|before donat\w*|prepar\w*|what to do before|what (?:should|to do|do) (?:i |we )?(?:bring|do|need)|donation day|hydrate|ano (?:ang )?dapat (?:dalhin|gawin)|bago (?:ako )?mag[-\s]?donate|maghanda|steps before|prior to donat\w*)\b/i;
+
+const ON_TOPIC_PATTERN =
+  /\b(blood\s*links?|bloodlink|hemie|blood|donat\w*|donor|dugo|eligib\w*|kwalipikado|kahilingan|compatib\w*|transfus\w*|hospital|urgency|recipient|screening|openstreetmap|blood bank|platelet|plasma|abo|rh factor)\b/i;
 
 const AVAILABILITY_PATTERN =
   /\b(availability|available to donate|donation availability|toggle|available (ba )?(ako|to donate)|i-?on ang availability)\b/i;
@@ -132,6 +136,204 @@ const GREETING_PATTERN =
 
 const HELP_PATTERN =
   /\b(help|help me|tulong|tabang|assist( me)?|paano (ba )?(ito|gumana)|what can you (do|help))\b/i;
+
+const FOLLOW_UP_PATTERN =
+  /^(yes|yeah|yep|yup|ok|okay|sure|next|continue|go on|what(?:'s| is) next|and then|how do i do that|opo|sige|oo|susunod|tuloy)[.!?]*$/i;
+
+const DONOR_GUIDE_STEPS = ['eligibility', 'prep', 'availability', 'map', 'qr'];
+const RECIPIENT_GUIDE_STEPS = ['request', 'compatibility', 'map', 'chat'];
+
+const GUIDE_QUESTIONS = {
+  eligibility: 'Am I eligible to donate?',
+  prep: 'What should I do before I donate?',
+  availability: 'How do I turn on donation availability?',
+  map: 'How do I use the map?',
+  qr: 'How does QR verification work?',
+  request: 'How do I create a blood request?',
+  compatibility: 'How does blood matching work?',
+  chat: 'How do I message a donor?',
+  interval: 'How long should I wait between donations?',
+};
+
+function isFollowUp(text) {
+  return FOLLOW_UP_PATTERN.test(normalizeText(text).toLowerCase());
+}
+
+function getGuideSteps(context = {}) {
+  return context.role === 'recipient' ? RECIPIENT_GUIDE_STEPS : DONOR_GUIDE_STEPS;
+}
+
+function classifyTopic(question) {
+  const normalized = normalizeText(question);
+  if (!normalized || isFollowUp(normalized)) {
+    return null;
+  }
+  if (EMERGENCY_PATTERN.test(normalized)) return 'safety';
+  if (OFF_TOPIC_PATTERN.test(normalized)) return 'guardrail';
+  if (ELIGIBILITY_PATTERN.test(normalized)) return 'eligibility';
+  if (INTERVAL_PATTERN.test(normalized)) return 'interval';
+  if (PREP_PATTERN.test(normalized)) return 'prep';
+  if (COMPATIBILITY_PATTERN.test(normalized)) return 'compatibility';
+  if (REQUEST_PATTERN.test(normalized)) return 'request';
+  if (AVAILABILITY_PATTERN.test(normalized)) return 'availability';
+  if (QR_PATTERN.test(normalized)) return 'qr';
+  if (MAP_PATTERN.test(normalized)) return 'map';
+  if (CHAT_PATTERN.test(normalized) && !/\bhemie\b/i.test(normalized)) return 'chat';
+  if (HELP_PATTERN.test(normalized) || GREETING_PATTERN.test(normalized)) return 'help';
+  if (!ON_TOPIC_PATTERN.test(normalized)) return 'guardrail';
+  return null;
+}
+
+function detectGuideLocale(question, messages = []) {
+  const fromQuestion = detectUserLocale(question);
+  if (fromQuestion === 'fil' || !isFollowUp(question)) {
+    return fromQuestion;
+  }
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role === 'user' && detectUserLocale(message.content) === 'fil') {
+      return 'fil';
+    }
+  }
+
+  return 'en';
+}
+
+function resolveGuidedQuestion(question, messages = [], context = {}) {
+  const locale = detectGuideLocale(question, messages);
+  if (!isFollowUp(question)) {
+    return { question, locale, topic: classifyTopic(question), done: false };
+  }
+
+  const steps = getGuideSteps(context);
+  let furthest = -1;
+  let priorFollowUps = 0;
+
+  for (const message of messages.slice(0, -1)) {
+    if (message?.role !== 'user') {
+      continue;
+    }
+    if (isFollowUp(message.content)) {
+      priorFollowUps += 1;
+      continue;
+    }
+    const index = steps.indexOf(classifyTopic(message.content));
+    if (index > furthest) {
+      furthest = index;
+    }
+  }
+
+  const nextIndex = furthest + 1 + priorFollowUps;
+  if (nextIndex >= steps.length) {
+    return { question, locale, topic: null, done: true };
+  }
+
+  const topic = steps[nextIndex];
+  return {
+    question: GUIDE_QUESTIONS[topic],
+    locale,
+    topic,
+    done: false,
+  };
+}
+
+function guideCue(topic, locale) {
+  const cues = {
+    eligibility: {
+      en: 'Reply "next" and I will check your eligibility against your BloodLink profile.',
+      fil: 'Mag-reply ng "next" at titingnan ko ang eligibility mo base sa BloodLink profile.',
+    },
+    prep: {
+      en: 'Reply "next" for what to bring and do before you donate.',
+      fil: 'Mag-reply ng "next" para sa dapat dalhin at gawin bago mag-donate.',
+    },
+    availability: {
+      en: 'Reply "next" and I will show you how to turn on Donation Availability on your Profile tab.',
+      fil: 'Mag-reply ng "next" para sa pag-on ng Donation Availability sa Profile tab.',
+    },
+    map: {
+      en: 'Reply "next" and I will show you how to find nearby requests or donors on the Map tab.',
+      fil: 'Mag-reply ng "next" para sa Map tab at nearby requests o donors.',
+    },
+    qr: {
+      en: 'Reply "next" for the QR verification step at the donation site.',
+      fil: 'Mag-reply ng "next" para sa QR verification sa donation site.',
+    },
+    request: {
+      en: 'Reply "next" and I will walk you through creating a blood request.',
+      fil: 'Mag-reply ng "next" para sa paggawa ng blood request.',
+    },
+    compatibility: {
+      en: 'Reply "next" and I will explain which blood types match.',
+      fil: 'Mag-reply ng "next" para sa blood type matching.',
+    },
+    chat: {
+      en: 'Reply "next" and I will show you how to message a matched donor or requester.',
+      fil: 'Mag-reply ng "next" para sa Messages tab.',
+    },
+  };
+
+  return cues[topic]?.[locale] || cues[topic]?.en || '';
+}
+
+function finishedGuide(locale) {
+  if (locale === 'fil') {
+    return 'Tapos na ang mga pangunahing hakbang sa BloodLink. Pwede mong tanungin ulit ang eligibility, matching, preparation, o QR verification.';
+  }
+  return 'That covers the main BloodLink steps. You can ask me to revisit eligibility, matching, preparation, or QR verification.';
+}
+
+function startGuide(context, locale) {
+  if (context.role === 'recipient') {
+    return locale === 'fil'
+      ? 'Gagabayan kita sa BloodLink.\n\n1. Gumawa ng blood request\n2. Tingnan ang compatible blood types\n3. Hanapin ang nearby donors sa Map\n4. Mag-message sa Messages tab\n\nMag-reply ng "next" para magsimula sa paggawa ng request.'
+      : 'I will guide you through requesting blood on BloodLink.\n\n1. Create a blood request\n2. Confirm compatible blood types\n3. Find nearby donors on the Map tab\n4. Message them in Messages\n\nReply "next" to start by creating a request.';
+  }
+
+  return locale === 'fil'
+    ? 'Gagabayan kita sa pag-donate gamit ang BloodLink.\n\n1. I-check ang eligibility\n2. Maghanda bago mag-donate\n3. I-on ang Donation Availability sa Profile tab\n4. Hanapin ang request sa Map\n5. Kumpletuhin ang QR verification sa donation site\n\nMag-reply ng "next" para simulan ang eligibility check.'
+    : 'I will guide you through donating on BloodLink, one step at a time.\n\n1. Check eligibility\n2. Prepare for donation day\n3. Turn on Donation Availability on your Profile tab\n4. Find a matching request on the Map tab\n5. Complete QR verification at the donation site\n\nReply "next" to start with eligibility.';
+}
+
+function applyConversationGuide(answer, topic, context, locale) {
+  if (!answer || answer.kind === 'safety' || topic === 'help') {
+    return answer;
+  }
+
+  if (answer.kind === 'guardrail') {
+    const cue = guideCue(getGuideSteps(context)[0], locale);
+    return { ...answer, reply: `${answer.reply}\n\n${cue}` };
+  }
+
+  if (answer.kind !== 'grounded') {
+    return answer;
+  }
+
+  if (topic === 'eligibility') {
+    const issues = getEligibilityIssues(context);
+    const hasProfileBasics = Boolean(context.birthdate) && context.weightKg != null;
+    if (!hasProfileBasics || issues.length > 0) {
+      const hold = locale === 'fil'
+        ? 'Huwag munang mag-donate hanggang ma-clear ang mga item sa itaas. Kapag tapos na, mag-reply ng "next" para sa preparation.'
+        : 'Do not donate until the items above are cleared. When they are, reply "next" for donation-day preparation.';
+      return { ...answer, reply: `${answer.reply}\n\n${hold}` };
+    }
+  }
+
+  const steps = getGuideSteps(context);
+  const roleKey = context.role === 'recipient' ? 'recipient' : 'donor';
+  const overrides = {
+    donor: { compatibility: 'map', interval: 'prep' },
+    recipient: { eligibility: 'request', prep: 'request', interval: 'request', availability: 'request', qr: 'chat' },
+  };
+  const nextTopic = overrides[roleKey][topic] || (steps.includes(topic) ? steps[steps.indexOf(topic) + 1] : steps[0]);
+  if (!nextTopic) {
+    return { ...answer, reply: `${answer.reply}\n\n${finishedGuide(locale)}` };
+  }
+
+  return { ...answer, reply: `${answer.reply}\n\n${guideCue(nextTopic, locale)}` };
+}
 
 function normalizeText(value) {
   return String(value || '')
@@ -377,11 +579,8 @@ function buildDonationIntervalReply(context = {}, locale = 'en') {
   return `Based on your last donation on file, wait ${daysUntilEligible} more day${daysUntilEligible === 1 ? '' : 's'} before your next whole-blood donation (BloodLink uses a ${DONATION_INTERVAL_DAYS}-day interval).`;
 }
 
-function getHelpReply(locale = 'en') {
-  if (locale === 'fil') {
-    return 'Ako si Hemie, BloodLink assistant mo. Magtanong tungkol sa eligibility, blood matching, donation timing, paggawa ng blood request, preparation, o paano gamitin ang BloodLink.';
-  }
-  return 'Hello! Ask me about eligibility, blood matching, donation timing, creating requests, preparation, or how BloodLink works.';
+function getHelpReply(locale = 'en', context = {}) {
+  return startGuide(context, locale);
 }
 
 function getFallbackHelpReply(locale = 'en') {
@@ -391,9 +590,9 @@ function getFallbackHelpReply(locale = 'en') {
   return 'I can help with donor eligibility, the 56-day donation interval, blood type matching, creating blood requests, donation preparation, and using BloodLink. Try one of the suggested questions or ask in your own words.';
 }
 
-function getGroundedHemieReply(question, context = {}, options = {}) {
+function buildClassifiedReply(question, context = {}, options = {}) {
   const normalized = normalizeText(question);
-  const locale = options.preferLocalLanguage === false ? 'en' : detectUserLocale(question);
+  const locale = options.locale || (options.preferLocalLanguage === false ? 'en' : detectUserLocale(question));
 
   if (EMERGENCY_PATTERN.test(normalized)) {
     return {
@@ -423,6 +622,10 @@ function getGroundedHemieReply(question, context = {}, options = {}) {
     return { reply: buildDonationIntervalReply(context, locale), kind: 'grounded' };
   }
 
+  if (PREP_PATTERN.test(normalized)) {
+    return { reply: buildPreparationReply(locale), kind: 'grounded' };
+  }
+
   if (COMPATIBILITY_PATTERN.test(normalized)) {
     return { reply: buildCompatibilityReply(context, locale), kind: 'grounded' };
   }
@@ -447,22 +650,12 @@ function getGroundedHemieReply(question, context = {}, options = {}) {
     };
   }
 
-  if (PREP_PATTERN.test(normalized)) {
-    return {
-      reply:
-        locale === 'fil'
-          ? 'Bago mag-donate, magdala ng valid ID, kumain ng healthy meal, uminom ng maraming tubig, at magpahinga nang sapat. Iwasan ang alcohol bago mag-donate at i-disclose ang medications o recent illnesses sa screening.'
-          : 'Before donating, bring a valid ID, eat a healthy meal, drink plenty of water, and get adequate rest. Avoid alcohol before donation and disclose medications or recent illnesses during screening.',
-      kind: 'grounded',
-    };
-  }
-
   if (AVAILABILITY_PATTERN.test(normalized)) {
     return {
       reply:
         locale === 'fil'
-          ? 'I-on ang Donation Availability sa donor Home screen kapag handa ka nang tumugon sa nearby requests. Panatilihing updated ang profile at verification para mas mabilis kang ma-match.'
-          : 'Turn on Donation Availability from your donor Home screen when you are ready to respond to nearby requests. Keep your profile and verification up to date so recipients can match with you faster.',
+          ? 'I-on ang Donation Availability sa Profile tab, katabi ng Edit Profile, kapag handa ka nang tumugon sa nearby requests. Panatilihing updated ang profile at verification para mas mabilis kang ma-match.'
+          : 'Turn on Donation Availability from your Profile tab, next to Edit Profile, when you are ready to respond to nearby requests. Keep your profile and verification up to date so recipients can match with you faster.',
       kind: 'grounded',
     };
   }
@@ -499,16 +692,59 @@ function getGroundedHemieReply(question, context = {}, options = {}) {
 
   if (HELP_PATTERN.test(normalized) || GREETING_PATTERN.test(normalized)) {
     return {
-      reply: getHelpReply(locale),
+      reply: getHelpReply(locale, context),
       kind: 'grounded',
+    };
+  }
+
+  if (!ON_TOPIC_PATTERN.test(normalized)) {
+    return {
+      reply:
+        locale === 'fil'
+          ? 'Ako si Hemie, BloodLink assistant mo. Tanging blood donation, eligibility, matching, at paggamit ng BloodLink ang kayang tulungan ko. Ano ang gusto mong malaman tungkol diyan?'
+          : "I'm Hemie, your BloodLink assistant. I can only help with blood donation, eligibility, matching, and how to use BloodLink. What would you like to know about those?",
+      kind: 'guardrail',
     };
   }
 
   return null;
 }
 
-function getLocalHemieReply(question, context = {}) {
-  const grounded = getGroundedHemieReply(question, context, { preferLocalLanguage: true });
+function getGroundedHemieReply(question, context = {}, options = {}) {
+  const guided = resolveGuidedQuestion(question, options.messages || [], context);
+  if (guided.done) {
+    return { reply: finishedGuide(guided.locale), kind: 'grounded' };
+  }
+
+  const answer = buildClassifiedReply(guided.question, context, {
+    ...options,
+    locale: guided.locale,
+  });
+  if (!answer) {
+    return null;
+  }
+
+  return applyConversationGuide(
+    answer,
+    guided.topic || classifyTopic(guided.question),
+    context,
+    guided.locale,
+  );
+}
+
+function buildPreparationReply(locale = 'en') {
+  if (locale === 'fil') {
+    return 'Bago mag-donate, magdala ng valid ID, kumain ng healthy meal, uminom ng maraming tubig, at magpahinga nang sapat. Iwasan ang alcohol bago mag-donate at i-disclose ang medications o recent illnesses sa screening.';
+  }
+
+  return 'Before donating, bring a valid ID, eat a healthy meal, drink plenty of water, and get adequate rest. Avoid alcohol before donation and disclose medications or recent illnesses during screening.';
+}
+
+function getLocalHemieReply(question, context = {}, messages) {
+  const grounded = getGroundedHemieReply(question, context, {
+    preferLocalLanguage: true,
+    messages: messages || [{ role: 'user', content: question }],
+  });
   if (grounded) {
     return grounded.reply;
   }
@@ -664,6 +900,15 @@ function buildContextBlock(context, question = '') {
   return lines.join('\n');
 }
 
+// Groq OpenAI-compatible chat completions. callOpenAiCompat appends /chat/completions.
+const DEFAULT_GROQ_BASE_URL = 'https://api.groq.com/openai/v1';
+const DEFAULT_GROQ_MODEL = 'openai/gpt-oss-120b';
+const DEFAULT_GROQ_FALLBACK_MODELS = ['openai/gpt-oss-20b'];
+const RETIRED_GROQ_MODELS = new Set([
+  'llama-3.3-70b-versatile',
+  'llama-3.1-8b-instant',
+]);
+const OLLAMA_PLACEHOLDER_API_KEY = 'ollama';
 const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
 const DEFAULT_GEMINI_FALLBACK_MODELS = [
   'gemini-3.1-flash-lite',
@@ -671,11 +916,15 @@ const DEFAULT_GEMINI_FALLBACK_MODELS = [
   'gemini-3.6-flash',
   'gemini-3.5-flash',
 ];
-const DEFAULT_OPENAI_COMPAT_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
 const DEFAULT_GEMINI_NATIVE_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 
+function isPlaceholderApiKey(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return !normalized || normalized === OLLAMA_PLACEHOLDER_API_KEY;
+}
+
 function isLlmConfigured(env = process.env) {
-  return Boolean(env.HEMIE_LLM_API_KEY && env.HEMIE_LLM_API_KEY.trim());
+  return !isPlaceholderApiKey(env.HEMIE_LLM_API_KEY);
 }
 
 function parseModelList(value) {
@@ -704,26 +953,85 @@ function uniqueModels(models) {
   return unique;
 }
 
+function isGeminiBaseUrl(baseUrl) {
+  return /generativelanguage\.googleapis\.com/i.test(baseUrl);
+}
+
+function isGeminiModel(model) {
+  return /^gemini-/i.test(model);
+}
+
+function isLlamaRequest(baseUrl, model) {
+  return /llama/i.test(model) || /together\.(xyz|ai)/i.test(baseUrl);
+}
+
+function isGroqBaseUrl(baseUrl) {
+  return /api\.groq\.com/i.test(baseUrl);
+}
+
+function isReasoningGroqModel(model) {
+  return /^openai\/gpt-oss-/i.test(model);
+}
+
+function isOllamaPlaceholderUrl(baseUrl) {
+  return /(?:127\.0\.0\.1|localhost):11434/i.test(baseUrl);
+}
+
+function isOllamaPlaceholderModel(model) {
+  return /^(llama3(?:\.1)?|llama2)$/i.test(model);
+}
+
 function getLlmConfig(env = process.env) {
   const apiKey = (env.HEMIE_LLM_API_KEY || '').trim();
-  const configuredBaseUrl = (env.HEMIE_LLM_BASE_URL || DEFAULT_OPENAI_COMPAT_BASE_URL).replace(/\/$/, '');
-  const primaryModel = (env.HEMIE_LLM_MODEL || DEFAULT_GEMINI_MODEL).trim();
+  let configuredBaseUrl = (env.HEMIE_LLM_BASE_URL || '').trim().replace(/\/$/, '');
+  let configuredModel = (env.HEMIE_LLM_MODEL || '').trim();
   const fallbackModels = parseModelList(env.HEMIE_LLM_FALLBACK_MODELS);
-  const models = uniqueModels([
-    primaryModel,
-    ...fallbackModels,
-    ...DEFAULT_GEMINI_FALLBACK_MODELS,
-  ]);
 
-  const usesGemini =
-    /generativelanguage\.googleapis\.com/i.test(configuredBaseUrl) ||
-    /^gemini-/i.test(primaryModel);
+  if (isOllamaPlaceholderUrl(configuredBaseUrl)) {
+    configuredBaseUrl = '';
+  }
+  if (isOllamaPlaceholderModel(configuredModel) || RETIRED_GROQ_MODELS.has(configuredModel)) {
+    configuredModel = '';
+  }
+
+  const usesGemini = isGeminiBaseUrl(configuredBaseUrl) || isGeminiModel(configuredModel);
+
+  if (usesGemini) {
+    const primaryModel = configuredModel || DEFAULT_GEMINI_MODEL;
+    return {
+      apiKey,
+      baseUrl: configuredBaseUrl,
+      models: uniqueModels([primaryModel, ...fallbackModels, ...DEFAULT_GEMINI_FALLBACK_MODELS]),
+      provider: 'gemini',
+    };
+  }
+
+  const primaryModel = configuredModel || DEFAULT_GROQ_MODEL;
+  const baseUrl = configuredBaseUrl || DEFAULT_GROQ_BASE_URL;
+  const provider = isGroqBaseUrl(baseUrl)
+    ? 'groq'
+    : isLlamaRequest(baseUrl, primaryModel)
+      ? 'llama'
+      : 'openai-compat';
+  const safeFallbacks =
+    provider === 'groq'
+      ? fallbackModels.filter(
+          (model) =>
+            !isGeminiModel(model) &&
+            !isOllamaPlaceholderModel(model) &&
+            !RETIRED_GROQ_MODELS.has(model),
+        )
+      : fallbackModels;
 
   return {
     apiKey,
-    baseUrl: configuredBaseUrl,
-    models,
-    provider: usesGemini ? 'gemini' : 'openai-compat',
+    baseUrl,
+    models: uniqueModels([
+      primaryModel,
+      ...safeFallbacks,
+      ...(provider === 'groq' ? DEFAULT_GROQ_FALLBACK_MODELS : []),
+    ]),
+    provider,
   };
 }
 
@@ -786,6 +1094,8 @@ async function callGeminiNative({
   model,
   apiKey,
   fetchImpl = fetch,
+  systemPrompt,
+  signal,
 }) {
   const latestUserMessage = messages[messages.length - 1]?.content || '';
   const url = `${DEFAULT_GEMINI_NATIVE_BASE_URL}/models/${encodeURIComponent(model)}:generateContent`;
@@ -796,9 +1106,10 @@ async function callGeminiNative({
       'Content-Type': 'application/json',
       'x-goog-api-key': apiKey,
     },
+    signal,
     body: JSON.stringify({
       systemInstruction: {
-        parts: [{ text: buildSystemPrompt(context, latestUserMessage) }],
+        parts: [{ text: systemPrompt || buildSystemPrompt(context, latestUserMessage) }],
       },
       contents: toGeminiContents(messages),
       generationConfig: {
@@ -832,41 +1143,90 @@ async function callOpenAiCompat({
   apiKey,
   baseUrl,
   fetchImpl = fetch,
+  systemPrompt,
+  signal,
 }) {
   const latestUserMessage = messages[messages.length - 1]?.content || '';
 
-  const response = await fetchImpl(`${baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.2,
-      max_tokens: MAX_REPLY_TOKENS,
-      messages: [
-        { role: 'system', content: buildSystemPrompt(context, latestUserMessage) },
-        ...messages,
-      ],
-    }),
-  });
+  const requestBody = {
+    model,
+    temperature: 0.2,
+    max_tokens: isReasoningGroqModel(model) ? 2048 : MAX_REPLY_TOKENS,
+    ...(isReasoningGroqModel(model) ? { reasoning_effort: 'low' } : {}),
+    stream: false,
+    messages: [
+      { role: 'system', content: systemPrompt || buildSystemPrompt(context, latestUserMessage) },
+      ...messages,
+    ],
+  };
 
-  const payload = await response.json().catch(() => null);
+  let lastReply = '';
 
-  if (!response.ok) {
-    throw createLlmError(
-      payload?.error?.message || payload?.message || `LLM request failed with status ${response.status}`,
-      response.status,
-    );
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const response = await fetchImpl(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      signal,
+      body: JSON.stringify({
+        ...requestBody,
+        max_tokens: requestBody.max_tokens * (attempt + 1),
+      }),
+    });
+
+    const payload = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw createLlmError(
+        payload?.error?.message || payload?.message || `LLM request failed with status ${response.status}`,
+        response.status,
+      );
+    }
+
+    const reply = extractOpenAiReply(payload);
+    const truncated = payload?.choices?.[0]?.finish_reason === 'length';
+
+    if (reply) {
+      lastReply = reply;
+    }
+
+    if (reply && !truncated) {
+      return reply;
+    }
   }
 
-  const reply = normalizeText(payload?.choices?.[0]?.message?.content);
-  if (!reply) {
-    throw createLlmError('LLM returned an empty reply.', 502);
+  if (lastReply) {
+    return lastReply;
   }
 
-  return reply;
+  throw createLlmError('LLM returned an empty reply.', 502);
+}
+
+function extractOpenAiReply(payload) {
+  const content = payload?.choices?.[0]?.message?.content;
+  let text = '';
+
+  if (typeof content === 'string') {
+    text = content;
+  } else if (Array.isArray(content)) {
+    text = content
+      .map((part) => (typeof part === 'string' ? part : part?.text || ''))
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  return normalizeReply(text.replace(/<think>[\s\S]*?<\/think>/gi, ' '));
+}
+
+function normalizeReply(value) {
+  return String(value || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
 }
 
 function shouldTryNextModel(error) {
@@ -888,7 +1248,14 @@ function shouldTryNextModel(error) {
   );
 }
 
-async function callHemieLlm({ messages, context, fetchImpl = fetch, env = process.env }) {
+async function callHemieLlm({
+  messages,
+  context,
+  fetchImpl = fetch,
+  env = process.env,
+  systemPrompt,
+  signal,
+}) {
   const { apiKey, baseUrl, models, provider } = getLlmConfig(env);
   let lastError = null;
 
@@ -901,6 +1268,8 @@ async function callHemieLlm({ messages, context, fetchImpl = fetch, env = proces
           model,
           apiKey,
           fetchImpl,
+          systemPrompt,
+          signal,
         });
       }
 
@@ -911,10 +1280,12 @@ async function callHemieLlm({ messages, context, fetchImpl = fetch, env = proces
         apiKey,
         baseUrl,
         fetchImpl,
+        systemPrompt,
+        signal,
       });
     } catch (error) {
       lastError = error;
-      console.error(`Hemie LLM model failed (${model}):`, error?.message || error);
+      console.error(`Hemie LLM model failed (${model}):`, error?.status || error?.name || 'Error');
 
       if (!shouldTryNextModel(error)) {
         throw error;
@@ -932,38 +1303,34 @@ async function generateHemieReply({
   env = process.env,
 }) {
   const latestUserMessage = messages[messages.length - 1]?.content || '';
-  const grounded = getGroundedHemieReply(latestUserMessage, context);
+  const locale = detectGuideLocale(latestUserMessage, messages);
+  const grounded = getGroundedHemieReply(latestUserMessage, context, { messages });
   const llmConfigured = isLlmConfigured(env);
 
-  // Without an LLM, return English local/safety replies as-is.
-  // With an LLM, pass safety/guardrail through so the model can reply in the user's language.
-  if ((grounded?.kind === 'safety' || grounded?.kind === 'guardrail') && !llmConfigured) {
+  // Known donation and BloodLink answers stay deterministic so the model cannot switch topics.
+  if (grounded) {
     return { reply: grounded.reply, source: grounded.kind };
   }
 
   if (!llmConfigured) {
     return {
-      reply: getLocalHemieReply(latestUserMessage, context),
-      source: grounded?.kind === 'grounded' ? 'grounded' : 'local',
+      reply: getLocalHemieReply(latestUserMessage, context, messages),
+      source: 'local',
     };
   }
 
   try {
     const reply = await callHemieLlm({ messages, context, fetchImpl, env });
-    return {
-      reply,
-      source:
-        grounded?.kind === 'safety'
-          ? 'safety'
-          : grounded?.kind === 'guardrail'
-            ? 'guardrail'
-            : 'llm',
-    };
+    const topic = classifyTopic(latestUserMessage);
+    const guidedReply = topic
+      ? applyConversationGuide({ reply, kind: 'grounded' }, topic, context, locale).reply
+      : `${reply}\n\n${guideCue(getGuideSteps(context)[0], locale)}`;
+    return { reply: guidedReply, source: 'llm' };
   } catch (error) {
     console.error('Hemie LLM failed, using local fallback:', error);
     return {
-      reply: getLocalHemieReply(latestUserMessage, context),
-      source: grounded?.kind === 'grounded' ? 'grounded_fallback' : 'local_fallback',
+      reply: getLocalHemieReply(latestUserMessage, context, messages),
+      source: 'local_fallback',
     };
   }
 }

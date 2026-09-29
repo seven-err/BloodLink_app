@@ -2,7 +2,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Hospital, Shield, Users, Zap } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { useEffect } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
   FadeIn,
@@ -19,6 +19,7 @@ import Animated, {
 import type { SharedValue } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LegalAgreementText } from '@/components/common/LegalAgreementText';
 import { PrimaryButton } from '@/components/common/PrimaryButton';
 import { colors, radii } from '@/constants/theme';
 import type { AuthStackParamList } from '@/navigation/types';
@@ -57,7 +58,7 @@ function OrbitBadge({ icon: Icon, label, angularOffset, orbit }: OrbitBadgeProps
     <Animated.View pointerEvents="none" style={[styles.badgeAnchor, animStyle]}>
       <View style={styles.orbitBadge}>
         <View style={styles.badgeIconCircle}>
-          <Icon color={colors.primary} size={11} strokeWidth={2.6} />
+          <Icon color={colors.muted} size={11} strokeWidth={2.6} />
         </View>
         <Text numberOfLines={1} style={styles.badgeLabel}>
           {label}
@@ -151,13 +152,6 @@ export function WelcomeScreen({ navigation }: Props) {
   const handleGetStarted = () => navigation.navigate('Signup');
   const handleExistingAccount = () => navigation.navigate('Login');
 
-  const openLegalInfo = (title: string) => {
-    Alert.alert(
-      title,
-      `${title} details will open here in a future update. For now, contact support@bloodlink.app with any questions.`,
-    );
-  };
-
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <ScrollView
@@ -221,24 +215,10 @@ export function WelcomeScreen({ navigation }: Props) {
             </Pressable>
           </View>
 
-          <Text style={styles.footer}>
-            By continuing, you agree to our{' '}
-            <Text
-              accessibilityRole="link"
-              style={styles.termsLink}
-              onPress={() => openLegalInfo('Terms of Service')}
-            >
-              Terms of Service
-            </Text>{' '}
-            and{' '}
-            <Text
-              accessibilityRole="link"
-              style={styles.termsLink}
-              onPress={() => openLegalInfo('Privacy Policy')}
-            >
-              Privacy Policy
-            </Text>
-          </Text>
+          <LegalAgreementText
+            leadIn="By continuing, you agree to our"
+            onOpen={(document) => navigation.navigate('LegalDocument', { document })}
+          />
         </Animated.View>
       </ScrollView>
     </SafeAreaView>
@@ -257,7 +237,7 @@ const styles = StyleSheet.create({
   },
   badgeIconCircle: {
     alignItems: 'center',
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.background,
     borderRadius: 10,
     height: 20,
     justifyContent: 'center',
@@ -277,13 +257,6 @@ const styles = StyleSheet.create({
   buttonPressed: {
     opacity: 0.82,
     transform: [{ scale: 0.985 }],
-  },
-  footer: {
-    color: colors.mutedLight,
-    fontSize: 10,
-    lineHeight: 18,
-    paddingHorizontal: 12,
-    textAlign: 'center',
   },
   headline: {
     color: colors.foreground,
@@ -353,7 +326,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   pulseRingBase: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.border,
     position: 'absolute',
   },
   safeArea: {
@@ -386,10 +359,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  termsLink: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
   textContainer: {
     alignItems: 'center',
     gap: 8,

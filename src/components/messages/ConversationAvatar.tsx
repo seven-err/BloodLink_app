@@ -21,14 +21,14 @@ export function ConversationAvatar({ initials, showOnline = false }: Conversatio
 const styles = StyleSheet.create({
   avatar: {
     alignItems: 'center',
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.background,
     borderRadius: 24,
     height: 48,
     justifyContent: 'center',
     width: 48,
   },
   initials: {
-    color: colors.primary,
+    color: colors.muted,
     fontSize: 16,
     fontWeight: '800',
   },

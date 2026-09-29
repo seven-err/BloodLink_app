@@ -11,7 +11,14 @@ import { supabase } from './client';
 export type Donation = Database['public']['Tables']['donations']['Row'];
 
 const DONATION_LIST_COLUMNS =
-  'id,match_id,donor_id,request_id,status,scheduled_at,completed_at,created_at,updated_at' as const;
+  'id,match_id,donor_id,request_id,bloodbank_id,status,scheduled_at,completed_at,created_at,updated_at' as const;
+
+// Every donation column EXCEPT verification_token. The token is no longer
+// selectable by clients (column privilege revoked in migration
+// 20260915000000); the owning donor fetches it via the get_donation_qr_token
+// RPC. Selecting `*` would now fail with a column-permission error.
+const DONATION_DETAIL_COLUMNS =
+  'id,match_id,donor_id,request_id,bloodbank_id,status,scheduled_at,completed_at,units_donated,notes,created_at,updated_at' as const;
 
 const SAFE_BLOOD_REQUEST_COLUMNS =
   'blood_type,units_needed,urgency,hospital_name,needed_at' as const;
@@ -60,6 +67,68 @@ const QR_ELIGIBLE_MATCH_STATUSES: DonorMatchStatus[] = ['accepted', 'completed']
 
 export const isQrEligibleMatchStatus = (status: DonorMatchStatus) =>
   QR_ELIGIBLE_MATCH_STATUSES.includes(status);
+
+/** A donation is completed only after staff confirm it with the donor QR. */
+export const isVerifiedCompletedDonation = (
+  donationStatus: DonationStatus | null | undefined,
+) => donationStatus === 'completed';
+
+export const isAwaitingDonationVerification = (
+  donationStatus: DonationStatus | null | undefined,
+) => donationStatus == null || donationStatus === 'scheduled';
+
+export const formatDonationVerificationStatus = (
+  donationStatus: DonationStatus | null | undefined,
+  matchStatus: DonorMatchStatus,
+) => {
+  if (donationStatus === 'completed') {
+    return 'completed';
+  }
+
+  if (donationStatus === 'cancelled') {
+    return 'cancelled';
+  }
+
+  if (donationStatus === 'no_show') {
+    return 'no show';
+  }
+
+  if (matchStatus === 'completed') {
+    return 'not verified';
+  }
+
+  return 'awaiting verification';
+};
+
+export const describeDonationVerification = (
+  donationStatus: DonationStatus | null | undefined,
+  matchStatus?: DonorMatchStatus,
+) => {
+  if (donationStatus === 'completed') {
+    return 'Donation verified by collection staff.';
+  }
+
+  if (donationStatus === 'cancelled') {
+    return 'This donation was cancelled and was not completed.';
+  }
+
+  if (donationStatus === 'no_show') {
+    return 'Marked as a no-show. The donation was not completed.';
+  }
+
+  if (matchStatus === 'completed') {
+    return 'The match is marked complete, but staff have not verified a donation.';
+  }
+
+  return 'Waiting for collection staff to scan the donor QR and confirm the donation.';
+};
+
+export type DonationVerification = {
+  id: string;
+  matchId: string;
+  status: DonationStatus;
+  completedAt: string | null;
+};
 
 const mapDonationListItem = (
   match: {
@@ -164,10 +233,50 @@ export const listDonorVerifiableItems = async (donorId: string) => {
 export const getDonationForDonor = (donationId: string, donorId: string) =>
   supabase
     .from('donations')
-    .select('*')
+    .select(DONATION_DETAIL_COLUMNS)
     .eq('id', donationId)
     .eq('donor_id', donorId)
     .maybeSingle();
+
+/** Donation status for a request the current user can already read (owner, donor, or staff). */
+export const listDonationVerificationsForRequest = async (requestId: string) => {
+  const { data, error } = await supabase
+    .from('donations')
+    .select('id,match_id,status,completed_at')
+    .eq('request_id', requestId);
+
+  if (error) {
+    return { data: null, error };
+  }
+
+  const verifications: DonationVerification[] = (data ?? []).map((row) => ({
+    id: row.id,
+    matchId: row.match_id,
+    status: row.status,
+    completedAt: row.completed_at,
+  }));
+
+  return { data: verifications, error: null };
+};
+
+/**
+ * Fetch the donation's verification token for the owning donor via a
+ * SECURITY DEFINER RPC. The token column is not directly selectable anymore,
+ * so this is the only client path to render a donation QR code.
+ */
+export const getDonationQrToken = async (
+  donationId: string,
+): Promise<{ token: string | null; error: string | null }> => {
+  const { data, error } = await supabase.rpc('get_donation_qr_token', {
+    p_donation_id: donationId,
+  });
+
+  if (error) {
+    return { token: null, error: error.message };
+  }
+
+  return { token: (data as string | null) ?? null, error: null };
+};
 
 export const ensureDonationForAcceptedMatch = async (
   matchId: string,
@@ -209,7 +318,8 @@ export const getDonationQrDetailsForDonor = async (
   donorId: string,
   options: { donationId?: string; matchId?: string },
 ): Promise<DonationQrResult> => {
-  let donation: Donation | null = null;
+  // Base donation row WITHOUT the verification token (column not selectable).
+  let donationBase: Omit<Donation, 'verification_token'> | null = null;
 
   if (options.donationId) {
     const { data, error } = await getDonationForDonor(options.donationId, donorId);
@@ -222,7 +332,7 @@ export const getDonationQrDetailsForDonor = async (
       return { kind: 'not_found' };
     }
 
-    donation = data;
+    donationBase = data;
   } else if (options.matchId) {
     const ensureResult = await ensureDonationForAcceptedMatch(options.matchId);
 
@@ -234,10 +344,27 @@ export const getDonationQrDetailsForDonor = async (
       return { kind: 'not_found' };
     }
 
-    donation = ensureResult.donation;
+    donationBase = ensureResult.donation;
   } else {
     return { kind: 'error', message: 'A donation or match identifier is required.' };
   }
+
+  if (!donationBase) {
+    return { kind: 'not_found' };
+  }
+
+  // Fetch the secret token via RPC (only the owning donor is authorized).
+  const { token, error: tokenError } = await getDonationQrToken(donationBase.id);
+
+  if (tokenError) {
+    return { kind: 'error', message: tokenError };
+  }
+
+  if (!token) {
+    return { kind: 'not_found' };
+  }
+
+  const donation: Donation = { ...donationBase, verification_token: token };
 
   const { data: summary, error: summaryError } = await loadSafeRequestSummary(
     donation.request_id,

@@ -11,6 +11,12 @@ import { submitBloodbankVerification } from '@/services/supabase/bloodbankVerifi
 import type { LocalDocument } from '@/services/supabase/storageUpload';
 import { DocumentPickerField } from '@/screens/auth/profile-setup/components/DocumentPickerField';
 import { authStyles } from '@/screens/auth/styles';
+import {
+  isPhilippineMobile,
+  normalizePhoneNumber,
+  PH_MOBILE_ERROR,
+  PH_MOBILE_PLACEHOLDER,
+} from '@/utils/phone';
 
 type Props = NativeStackScreenProps<BloodBankStackParamList, 'BloodBankResubmit'>;
 
@@ -35,6 +41,11 @@ export function BloodBankResubmitScreen({ navigation }: Props) {
       return;
     }
 
+    if (workPhone.trim() && !isPhilippineMobile(workPhone)) {
+      setError(PH_MOBILE_ERROR);
+      return;
+    }
+
     if (!documents.length) {
       setError('Upload at least one proof of affiliation document.');
       return;
@@ -50,11 +61,11 @@ export function BloodBankResubmitScreen({ navigation }: Props) {
         employeeId,
         fullName: profile.full_name,
         hospitalName,
-        phone: profile.phone ?? workPhone,
+        phone: profile.phone ?? (workPhone.trim() ? normalizePhoneNumber(workPhone) : workPhone),
         position,
         userId: session.user.id,
         workEmail,
-        workPhone,
+        workPhone: workPhone.trim() ? normalizePhoneNumber(workPhone) : workPhone,
       });
 
       if (submitError) {
@@ -104,7 +115,8 @@ export function BloodBankResubmitScreen({ navigation }: Props) {
       />
       <FormTextInput
         keyboardType="phone-pad"
-        label="Phone Number"
+        label="Philippine mobile number"
+        placeholder={PH_MOBILE_PLACEHOLDER}
         value={workPhone}
         onChangeText={setWorkPhone}
       />
@@ -121,7 +133,7 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   screen: {
-    backgroundColor: colors.backgroundTint,
+    backgroundColor: colors.background,
     flex: 1,
   },
   subtitle: {

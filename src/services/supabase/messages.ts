@@ -71,6 +71,13 @@ export const verifyMessagingAuthorized = async (
     return { kind: 'unauthorized', message: 'You are not a participant in this conversation.' };
   }
 
+  if (requesterId === donorId) {
+    return {
+      kind: 'unauthorized',
+      message: 'You cannot chat on your own blood request.',
+    };
+  }
+
   const expectedOtherPartyId = isRequester ? donorId : requesterId;
 
   if (context.recipientId !== expectedOtherPartyId) {
@@ -79,6 +86,8 @@ export const verifyMessagingAuthorized = async (
 
   return { kind: 'authorized' };
 };
+
+export type ConversationInboxStatus = 'active' | 'archived';
 
 export type ConversationPreview = {
   bloodRequestId: string;
@@ -89,6 +98,15 @@ export type ConversationPreview = {
   lastMessageBody: string;
   lastMessageAt: string;
   unreadCount: number;
+  inboxStatus: ConversationInboxStatus;
+};
+
+export type ConversationCounterpart = {
+  donorMatchId: string;
+  bloodRequestId: string;
+  otherPartyId: string;
+  displayName: string;
+  bloodType: BloodType | null;
 };
 
 const MESSAGING_ELIGIBLE_STATUSES = ['accepted', 'completed'] as const;
@@ -177,6 +195,20 @@ export const resolveConversationRouteParams = async (
     return { kind: 'error', message: 'You are not a participant in this conversation.' };
   }
 
+  if (request.requester_id === match.donor_id) {
+    return { kind: 'error', message: 'You cannot chat on your own blood request.' };
+  }
+
+  const counterpart = await getConversationCounterpart(donorMatchId);
+
+  if (counterpart) {
+    return {
+      kind: 'success',
+      recipientId: counterpart.otherPartyId,
+      recipientDisplayName: counterpart.displayName,
+    };
+  }
+
   const otherPartyId = isRequester ? match.donor_id : request.requester_id;
 
   if (isRequester) {
@@ -197,41 +229,41 @@ export const resolveConversationRouteParams = async (
     };
   }
 
-  // This is the donor's view of the conversation, so `otherPartyId` is the requester's ID.
-  const { data: requesterProfile, error: profileError } = await supabase
-    .from('profiles')
-    .select('full_name')
-    .eq('id', otherPartyId)
-    .single();
-
-  if (profileError) {
-    console.warn(`Could not fetch profile for ${otherPartyId}: ${profileError.message}`);
-  }
-
-  if (requesterProfile?.full_name?.trim()) {
-    return {
-      kind: 'success',
-      recipientId: otherPartyId,
-      recipientDisplayName: requesterProfile.full_name.trim(),
-    };
-  }
-
-  // Fallback to the original method if the profile isn't available
-  const { data: requestDetails, error: requestDetailsError } = await supabase
-    .from('blood_requests')
-    .select('hospital_name, contact_phone')
-    .eq('id', bloodRequestId)
-    .maybeSingle();
-
-  if (requestDetailsError) {
-    return { kind: 'error', message: requestDetailsError.message };
-  }
-
   return {
     kind: 'success',
     recipientId: otherPartyId,
-    recipientDisplayName: getRequesterContactLabel(requestDetails),
+    recipientDisplayName: 'Blood recipient',
   };
+};
+
+const mapCounterpart = (row: {
+  donor_match_id: string;
+  blood_request_id: string;
+  other_party_id: string;
+  display_name: string;
+  blood_type: BloodType | null;
+}): ConversationCounterpart => ({
+  bloodRequestId: row.blood_request_id,
+  bloodType: row.blood_type,
+  displayName: row.display_name.trim() || 'BloodLink user',
+  donorMatchId: row.donor_match_id,
+  otherPartyId: row.other_party_id,
+});
+
+export const getConversationCounterpart = async (
+  donorMatchId: string,
+): Promise<ConversationCounterpart | null> => {
+  const { data, error } = await supabase
+    .from('conversation_counterparts')
+    .select('donor_match_id, blood_request_id, other_party_id, display_name, blood_type')
+    .eq('donor_match_id', donorMatchId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return mapCounterpart(data);
 };
 
 export const listConversations = async (currentUserId: string) => {
@@ -289,6 +321,8 @@ export const listConversations = async (currentUserId: string) => {
     { data: requests, error: requestError },
     { data: rawMessages, error: messageError },
     { data: donorSummaries, error: donorSummaryError },
+    { data: counterparts, error: counterpartError },
+    { data: conversationStates, error: conversationStateError },
   ] = await Promise.all([
     supabase
       .from('blood_requests')
@@ -305,6 +339,15 @@ export const listConversations = async (currentUserId: string) => {
       .from('recipient_donor_match_responses')
       .select('id, donor_name, donor_blood_type')
       .in('id', matchIds),
+    supabase
+      .from('conversation_counterparts')
+      .select('donor_match_id, blood_request_id, other_party_id, display_name, blood_type')
+      .in('donor_match_id', matchIds),
+    supabase
+      .from('conversation_states')
+      .select('donor_match_id, status')
+      .eq('user_id', currentUserId)
+      .in('donor_match_id', matchIds),
   ]);
 
   if (requestError) {
@@ -317,6 +360,14 @@ export const listConversations = async (currentUserId: string) => {
 
   if (donorSummaryError) {
     return { data: null, error: donorSummaryError };
+  }
+
+  if (counterpartError && counterpartError.code !== 'PGRST205') {
+    return { data: null, error: counterpartError };
+  }
+
+  if (conversationStateError && conversationStateError.code !== 'PGRST205') {
+    return { data: null, error: conversationStateError };
   }
 
   const requesterIds = [...new Set((requests ?? []).map((r) => r.requester_id).filter(Boolean))];
@@ -350,6 +401,12 @@ export const listConversations = async (currentUserId: string) => {
   const donorSummaryByMatchId = new Map(
     (donorSummaries ?? []).map((summary) => [summary.id, summary]),
   );
+  const counterpartByMatchId = new Map(
+    (counterparts ?? []).map((row) => [row.donor_match_id, mapCounterpart(row)]),
+  );
+  const inboxStatusByMatchId = new Map(
+    (conversationStates ?? []).map((state) => [state.donor_match_id, state.status]),
+  );
   const conversations: ConversationPreview[] = [];
 
   for (const match of matchById.values()) {
@@ -367,14 +424,28 @@ export const listConversations = async (currentUserId: string) => {
       continue;
     }
 
-    const otherPartyId = isDonor ? requesterId : match.donor_id;
+    if (requesterId === match.donor_id) {
+      continue;
+    }
+
+    const inboxStatus = inboxStatusByMatchId.get(match.id) ?? 'active';
+
+    if (inboxStatus === 'deleted') {
+      continue;
+    }
+
+    const counterpart = counterpartByMatchId.get(match.id);
+    const otherPartyId = counterpart?.otherPartyId ?? (isDonor ? requesterId : match.donor_id);
     const donorSummary = donorSummaryByMatchId.get(match.id);
     const requesterProfile = requesterId ? requesterProfileById.get(requesterId) : undefined;
 
-    const displayName = isDonor
-      ? requesterProfile?.full_name?.trim() || getRequesterContactLabel(request)
-      : donorSummary?.donor_name?.trim() || 'BloodLink donor';
-    const bloodType = isDonor ? null : (donorSummary?.donor_blood_type ?? null);
+    const displayName =
+      counterpart?.displayName ||
+      (isDonor
+        ? requesterProfile?.full_name?.trim() || getRequesterContactLabel(request)
+        : donorSummary?.donor_name?.trim() || 'BloodLink donor');
+    const bloodType =
+      counterpart?.bloodType ?? (isDonor ? null : (donorSummary?.donor_blood_type ?? null));
 
     const matchMessages = messagesByMatch.get(match.id) ?? [];
     const latestMessage = matchMessages[0];
@@ -394,6 +465,7 @@ export const listConversations = async (currentUserId: string) => {
       lastMessageBody: latestMessage?.body ?? EMPTY_CONVERSATION_SNIPPET,
       lastMessageAt: latestMessage?.created_at ?? match.updated_at ?? match.created_at,
       unreadCount,
+      inboxStatus,
     });
   }
 
@@ -502,6 +574,20 @@ export const markUnreadMessagesRead = async (
     .in('id', unreadIds)
     .eq('recipient_id', currentUserId)
     .eq('status', 'sent');
+
+  return { error };
+};
+
+export type ConversationStateStatus = 'active' | 'archived' | 'deleted';
+
+export const setConversationState = async (
+  donorMatchId: string,
+  status: ConversationStateStatus,
+) => {
+  const { error } = await supabase.rpc('set_conversation_state', {
+    p_donor_match_id: donorMatchId,
+    p_status: status,
+  });
 
   return { error };
 };

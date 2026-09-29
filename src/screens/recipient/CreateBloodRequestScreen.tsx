@@ -1,8 +1,9 @@
+import { useFocusEffect } from '@react-navigation/native';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as Location from 'expo-location';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ArrowLeft, Droplets, MapPin } from 'lucide-react-native';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
   ActivityIndicator,
@@ -16,18 +17,28 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { z } from 'zod';
 
+import { ContentLoadingSkeleton } from '@/components/common/ContentLoadingSkeleton';
+import { PrimaryButton } from '@/components/common/PrimaryButton';
 import { BloodTypeSelector } from '@/components/forms/BloodTypeSelector';
 import { FormUrgencySelector } from '@/components/forms/FormUrgencySelector';
 import { MedicalDocumentUploadField } from '@/components/forms/MedicalDocumentUploadField';
 import { RequestFormField } from '@/components/forms/RequestFormField';
 import { BLOOD_TYPES } from '@/constants/bloodTypes';
-import { mapFormUrgencyToDb } from '@/constants/createBloodRequestForm';
+import { mapDbUrgencyToForm, mapFormUrgencyToDb } from '@/constants/createBloodRequestForm';
 import { colors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import type { AppStackParamList } from '@/navigation/types';
 import { createBloodRequestStyles } from '@/screens/recipient/createBloodRequestStyles';
 import { getHighAccuracyPosition } from '@/services/location/getHighAccuracyPosition';
-import { createBloodRequest } from '@/services/supabase/bloodRequests';
+import {
+  canEditBloodRequest,
+  createBloodRequest,
+  formatBloodRequestCooldown,
+  getBloodRequestById,
+  getBloodRequestCooldownRemainingSeconds,
+  getMyBloodRequests,
+  updateBloodRequest,
+} from '@/services/supabase/bloodRequests';
 import { uploadBloodRequestAttachment, type LocalDocument } from '@/services/supabase/storageUpload';
 import type { BloodType } from '@/types/database';
 import { appCache } from '@/utils/appCache';
@@ -64,6 +75,8 @@ type Coordinates = {
 export function CreateBloodRequestScreen({ navigation, route }: Props) {
   const { bottom: bottomInset, top: topInset } = useSafeAreaInsets();
   const { session, profile } = useAuth();
+  const requestId = route.params?.requestId;
+  const isEditing = Boolean(requestId);
   const [coordinates, setCoordinates] = useState<Coordinates>({
     latitude: profile?.latitude ?? null,
     longitude: profile?.longitude ?? null,
@@ -73,10 +86,16 @@ export function CreateBloodRequestScreen({ navigation, route }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [editableRequestId, setEditableRequestId] = useState<string | null>(null);
+  const [formReady, setFormReady] = useState(!isEditing);
+  const [editBlocked, setEditBlocked] = useState(false);
+  const cooldownActive = !isEditing && cooldownSeconds > 0;
 
   const {
     control,
     handleSubmit,
+    reset,
     setValue,
     watch,
     formState: { errors },
@@ -92,6 +111,103 @@ export function CreateBloodRequestScreen({ navigation, route }: Props) {
     },
     resolver: zodResolver(bloodRequestSchema),
   });
+
+  const refreshCooldown = useCallback(async () => {
+    if (isEditing || !session?.user.id) {
+      setCooldownSeconds(0);
+      setEditableRequestId(null);
+      return;
+    }
+
+    const remaining = await getBloodRequestCooldownRemainingSeconds();
+    setCooldownSeconds(remaining);
+
+    if (remaining <= 0) {
+      setEditableRequestId(null);
+      return;
+    }
+
+    const { data } = await getMyBloodRequests(session.user.id);
+    const latestEditable = (data ?? []).find((request) =>
+      canEditBloodRequest(request, session.user.id),
+    );
+    setEditableRequestId(latestEditable?.id ?? null);
+  }, [isEditing, session?.user.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshCooldown();
+    }, [refreshCooldown]),
+  );
+
+  useEffect(() => {
+    if (!cooldownActive) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setCooldownSeconds((current) => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [cooldownActive]);
+
+  useEffect(() => {
+    if (!requestId) {
+      setFormReady(true);
+      setEditBlocked(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadRequest = async () => {
+      setFormReady(false);
+      setEditBlocked(false);
+      setError(null);
+
+      const { data, error: loadError } = await getBloodRequestById(requestId);
+
+      if (cancelled) {
+        return;
+      }
+
+      if (loadError || !data) {
+        setError(loadError?.message ?? 'Unable to load this request.');
+        setEditBlocked(true);
+        setFormReady(true);
+        return;
+      }
+
+      if (!session?.user.id || !canEditBloodRequest(data, session.user.id)) {
+        setError('You can only edit your own open or matched requests.');
+        setEditBlocked(true);
+        setFormReady(true);
+        return;
+      }
+
+      reset({
+        address: data.address ?? '',
+        bloodType: data.blood_type,
+        hospitalName: data.hospital_name,
+        notes: data.notes ?? '',
+        patientName: data.patient_name ?? '',
+        unitsNeeded: data.units_needed,
+        urgencyLevel: mapDbUrgencyToForm(data.urgency),
+      });
+      setCoordinates({
+        latitude: data.latitude,
+        longitude: data.longitude,
+      });
+      setFormReady(true);
+    };
+
+    void loadRequest();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [requestId, reset, session?.user.id]);
 
   const selectedBloodType = watch('bloodType');
   const selectedUrgencyLevel = watch('urgencyLevel');
@@ -139,7 +255,7 @@ export function CreateBloodRequestScreen({ navigation, route }: Props) {
   };
 
   const onSubmit = async (values: BloodRequestFormValues) => {
-    if (loading) {
+    if (loading || cooldownActive || editBlocked || (isEditing && !formReady)) {
       return;
     }
 
@@ -158,29 +274,40 @@ export function CreateBloodRequestScreen({ navigation, route }: Props) {
         attachmentPath = await uploadBloodRequestAttachment(session.user.id, document);
       }
 
-      const { data, error: createError } = await createBloodRequest({
+      const payload = {
         address: values.address,
-        attachmentPath,
         bloodType: values.bloodType,
-        contactPhone: profile?.phone ?? null,
         hospitalName: values.hospitalName,
         latitude: coordinates.latitude,
         longitude: coordinates.longitude,
-        neededAt: getDefaultNeededAt(),
         notes: values.notes || null,
         patientName: values.patientName,
-        requesterId: session.user.id,
         unitsNeeded: values.unitsNeeded,
         urgency: mapFormUrgencyToDb(values.urgencyLevel),
-      });
+      };
+      const { data, error: saveError } = isEditing && requestId
+        ? await updateBloodRequest(requestId, session.user.id, {
+            ...payload,
+            ...(attachmentPath ? { attachmentPath } : {}),
+          })
+        : await createBloodRequest({
+            ...payload,
+            attachmentPath,
+            contactPhone: profile?.phone ?? null,
+            neededAt: getDefaultNeededAt(),
+            requesterId: session.user.id,
+          });
 
-      if (createError) {
-        setError(createError.message);
+      if (saveError) {
+        if (saveError.message.toLowerCase().includes('before creating another blood request')) {
+          void refreshCooldown();
+        }
+        setError(saveError.message);
         return;
       }
 
       if (!data) {
-        setError('Unable to create blood request.');
+        setError(isEditing ? 'Unable to update blood request.' : 'Unable to create blood request.');
         return;
       }
 
@@ -194,7 +321,9 @@ export function CreateBloodRequestScreen({ navigation, route }: Props) {
       setError(
         submitError instanceof Error
           ? submitError.message
-          : 'Unable to create blood request.',
+          : isEditing
+            ? 'Unable to update blood request.'
+            : 'Unable to create blood request.',
       );
     } finally {
       setLoading(false);
@@ -221,9 +350,18 @@ export function CreateBloodRequestScreen({ navigation, route }: Props) {
         >
           <ArrowLeft color={colors.foreground} size={22} />
         </Pressable>
-        <Text style={createBloodRequestStyles.headerTitle}>New Blood Request</Text>
+        <Text style={createBloodRequestStyles.headerTitle}>
+          {isEditing ? 'Edit Blood Request' : 'New Blood Request'}
+        </Text>
       </View>
 
+      {isEditing && !formReady ? (
+        <ContentLoadingSkeleton rows={2} />
+      ) : editBlocked ? (
+        <View style={createBloodRequestStyles.scrollContent}>
+          {error ? <Text style={createBloodRequestStyles.errorText}>{error}</Text> : null}
+        </View>
+      ) : (
       <ScrollView
         contentContainerStyle={createBloodRequestStyles.scrollContent}
         keyboardShouldPersistTaps="handled"
@@ -234,9 +372,13 @@ export function CreateBloodRequestScreen({ navigation, route }: Props) {
             <Droplets color={colors.primaryForeground} size={26} />
           </View>
           <View style={createBloodRequestStyles.heroBannerText}>
-            <Text style={createBloodRequestStyles.heroBannerTitle}>Request Blood Donation</Text>
+            <Text style={createBloodRequestStyles.heroBannerTitle}>
+              {isEditing ? 'Update This Request' : 'Request Blood Donation'}
+            </Text>
             <Text style={createBloodRequestStyles.heroBannerSubtitle}>
-              Fill in the details below. Nearby donors will be notified instantly.
+              {isEditing
+                ? 'Save corrections here. Donors see the update, but are not alerted again.'
+                : 'Fill in the details below. Nearby donors will be notified instantly.'}
             </Text>
           </View>
         </View>
@@ -252,11 +394,13 @@ export function CreateBloodRequestScreen({ navigation, route }: Props) {
             render={({ field: { onBlur, onChange, value } }) => (
               <RequestFormField
                 error={errors.patientName?.message}
+                // keyboardType='number-pad'
                 label="Patient Name / Label"
                 placeholder="e.g. Juan Dela Cruz"
                 value={value}
                 onBlur={onBlur}
                 onChangeText={onChange}
+                // onChangeText={(text) => onChange(text.replace(/\D/g, ''))}
               />
             )}
           />
@@ -351,7 +495,7 @@ export function CreateBloodRequestScreen({ navigation, route }: Props) {
               <ActivityIndicator color={colors.mutedLight} size="small" />
             ) : (
               <MapPin
-                color={coordinates.latitude != null ? colors.primary : colors.mutedLight}
+                color={coordinates.latitude != null ? colors.success : colors.mutedLight}
                 size={18}
               />
             )}
@@ -418,25 +562,52 @@ export function CreateBloodRequestScreen({ navigation, route }: Props) {
 
         {error ? <Text style={createBloodRequestStyles.errorText}>{error}</Text> : null}
       </ScrollView>
+      )}
 
+      {!editBlocked && formReady ? (
       <View style={[createBloodRequestStyles.footer, { paddingBottom: bottomInset + 16 }]}>
+        {cooldownActive ? (
+          <Text style={createBloodRequestStyles.cooldownText}>
+            You recently posted a request. Wait {formatBloodRequestCooldown(cooldownSeconds)} before
+            posting another one. You can still edit the request you already sent.
+          </Text>
+        ) : null}
+        {editableRequestId ? (
+          <PrimaryButton
+            title="Edit your request"
+            variant="secondary"
+            onPress={() =>
+              navigation.navigate('CreateBloodRequest', { requestId: editableRequestId })
+            }
+          />
+        ) : null}
         <Pressable
           accessibilityRole="button"
-          disabled={loading}
+          accessibilityState={{ disabled: loading || cooldownActive }}
+          disabled={loading || cooldownActive}
           style={({ pressed }) => [
             createBloodRequestStyles.submitButton,
-            loading ? createBloodRequestStyles.submitButtonDisabled : null,
-            pressed && !loading ? createBloodRequestStyles.submitButtonPressed : null,
+            loading || cooldownActive ? createBloodRequestStyles.submitButtonDisabled : null,
+            pressed && !loading && !cooldownActive
+              ? createBloodRequestStyles.submitButtonPressed
+              : null,
           ]}
           onPress={handleSubmit(onSubmit)}
         >
           {loading ? (
             <ActivityIndicator color={colors.primaryForeground} />
           ) : (
-            <Text style={createBloodRequestStyles.submitButtonText}>Submit Request</Text>
+            <Text style={createBloodRequestStyles.submitButtonText}>
+              {cooldownActive
+                ? `Wait ${formatBloodRequestCooldown(cooldownSeconds)}`
+                : isEditing
+                  ? 'Save Changes'
+                  : 'Submit Request'}
+            </Text>
           )}
         </Pressable>
       </View>
+      ) : null}
     </KeyboardAvoidingView>
   );
 }

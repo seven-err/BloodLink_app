@@ -101,7 +101,7 @@ export const donorRequestFeedStyles = StyleSheet.create({
     paddingBottom: 32,
   },
   mapTextLink: {
-    color: colors.primary,
+    color: colors.muted,
     fontSize: 14,
     fontWeight: '700',
   },

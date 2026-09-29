@@ -15,7 +15,7 @@ type RoleSelectionCardProps = {
 export function RoleSelectionCard({
   description,
   icon,
-  iconBackground = colors.primarySoft,
+  iconBackground = colors.background,
   onPress,
   selected,
   title,

@@ -107,7 +107,7 @@ export const OpenStreetMapView = forwardRef<OpenStreetMapViewHandle, OpenStreetM
           mapMode,
           resolvedUserLocation,
         ),
-      [mapMode, markers, region, resolvedUserLocation],
+      [mapMode, markers, region, resolvedUserLocation, selectedMarkerId],
     );
 
     useEffect(() => {

@@ -48,10 +48,10 @@ const URGENCY_PRIORITY = {
 } as const;
 
 const FILTER_CHIPS: { id: RequestFilter; label: string; icon?: typeof Flame }[] = [
+  { id: 'compatible', label: 'Compatible', icon: Check },
   { id: 'all', label: 'All' },
   { id: 'critical', label: 'Critical', icon: Flame },
   { id: 'high', label: 'High' },
-  { id: 'compatible', label: 'Compatible', icon: Check },
 ];
 
 const getRequestDisplayTitle = (request: OpenBloodRequestFeedItem) => {
@@ -141,7 +141,7 @@ export function DonorRequestFeedScreen({ navigation }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<RequestFilter>('all');
+  const [activeFilter, setActiveFilter] = useState<RequestFilter>('compatible');
 
   const donorCoordinates = useMemo(() => {
     if (
@@ -235,7 +235,7 @@ export function DonorRequestFeedScreen({ navigation }: Props) {
           return false;
         }
 
-        if (activeFilter === 'compatible' && !request.compatible) {
+        if (activeFilter === 'compatible' && profile?.blood_type && !request.compatible) {
           return false;
         }
 
@@ -256,18 +256,35 @@ export function DonorRequestFeedScreen({ navigation }: Props) {
         return haystack.includes(normalizedQuery);
       })
       .sort((left, right) => {
+        if (activeFilter === 'compatible') {
+          if (left.distanceMeters == null && right.distanceMeters != null) {
+            return 1;
+          }
+
+          if (left.distanceMeters != null && right.distanceMeters == null) {
+            return -1;
+          }
+
+          if (left.distanceMeters != null && right.distanceMeters != null) {
+            const distanceDiff = left.distanceMeters - right.distanceMeters;
+            if (distanceDiff !== 0) {
+              return distanceDiff;
+            }
+          }
+        }
+
         const urgencyDiff = URGENCY_PRIORITY[left.urgency] - URGENCY_PRIORITY[right.urgency];
         if (urgencyDiff !== 0) {
           return urgencyDiff;
         }
 
-        if (left.distanceMeters != null && right.distanceMeters != null) {
+        if (activeFilter !== 'compatible' && left.distanceMeters != null && right.distanceMeters != null) {
           return left.distanceMeters - right.distanceMeters;
         }
 
         return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
       });
-  }, [activeFilter, enrichedRequests, searchQuery]);
+  }, [activeFilter, enrichedRequests, profile?.blood_type, searchQuery]);
 
   const handleFilterShortcut = () => {
     if (activeFilter === 'all') {
@@ -305,7 +322,7 @@ export function DonorRequestFeedScreen({ navigation }: Props) {
           ]}
           onPress={() => navigation.navigate('Map')}
         >
-          <Map color={colors.primaryDark} size={18} strokeWidth={2} />
+          <Map color={colors.muted} size={18} strokeWidth={2} />
         </Pressable>
       </View>
 
@@ -315,7 +332,7 @@ export function DonorRequestFeedScreen({ navigation }: Props) {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            tintColor={colors.primary}
+            tintColor={colors.muted}
             onRefresh={() => void loadRequests(true)}
           />
         }
@@ -418,6 +435,13 @@ export function DonorRequestFeedScreen({ navigation }: Props) {
               title={request.title}
               unitsNeeded={request.units_needed}
               urgency={request.urgency}
+              onChat={() => navigation.navigate('Chat')}
+              onRespond={() =>
+                navigation.getParent()?.navigate('DonorRequestDetail', {
+                  requestId: request.id,
+                  intent: 'respond',
+                })
+              }
               onViewDetails={() =>
                 navigation
                   .getParent()

@@ -109,7 +109,7 @@ export function NearbyDonorCard({
               onDirections();
             }}
           >
-            <Navigation color={colors.primary} size={15} strokeWidth={2.25} />
+            <Navigation color={colors.muted} size={15} strokeWidth={2.25} />
             <Text style={styles.directionsBtnText}>Get directions</Text>
           </Pressable>
         </View>
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
   },
   avatarShell: {
     alignItems: 'center',
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.background,
     borderRadius: 999,
     height: 52,
     justifyContent: 'center',
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     width: 52,
   },
   avatarText: {
-    color: colors.primary,
+    color: colors.muted,
     fontSize: 18,
     fontWeight: '800',
   },
@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
   },
   directionsBtn: {
     alignItems: 'center',
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.background,
     borderRadius: 12,
     flexDirection: 'row',
     gap: 6,
@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   directionsBtnText: {
-    color: colors.primary,
+    color: colors.foreground,
     fontSize: 14,
     fontWeight: '700',
   },

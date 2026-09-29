@@ -6,13 +6,16 @@ import { AppTabNavigator } from '@/navigation/AppTabNavigator';
 import type { AppStackParamList } from '@/navigation/types';
 import { DonationQrScreen } from '@/screens/donor/DonationQrScreen';
 import { DonorRequestDetailScreen } from '@/screens/donor/DonorRequestDetailScreen';
+import { DonorPreScreeningScreen } from '@/screens/donor/DonorPreScreeningScreen';
 import { MyDonationsScreen } from '@/screens/donor/MyDonationsScreen';
 import { NearbyDonorDetailScreen } from '@/screens/donor/NearbyDonorDetailScreen';
 import { HemieAIScreen } from '@/screens/hemie/HemieAIScreen';
+import { ApplyDonorScreen } from '@/screens/profile/ApplyDonorScreen';
 import { EditProfileScreen } from '@/screens/profile/EditProfileScreen';
 import { ProfileQrScreen } from '@/screens/profile/ProfileQrScreen';
 import { AccountSettingsScreen } from '@/screens/profile/AccountSettingsScreen';
 import { ProfilePictureScreen } from '@/screens/profile/ProfilePictureScreen';
+import { ReportSafetyScreen } from '@/screens/profile/ReportSafetyScreen';
 import { SettingsDetailScreen } from '@/screens/profile/SettingsDetailScreen';
 import { SettingsScreen } from '@/screens/profile/SettingsScreen';
 import { BloodRequestDetailScreen } from '@/screens/recipient/BloodRequestDetailScreen';
@@ -40,7 +43,7 @@ export function AppNavigator() {
           backgroundColor: colors.background,
         },
         headerShadowVisible: false,
-        headerTintColor: colors.primaryDark,
+        headerTintColor: colors.foreground,
       }}
     >
       <Stack.Screen
@@ -59,6 +62,11 @@ export function AppNavigator() {
         options={{ headerShown: false }}
       />
       <Stack.Screen
+        component={ApplyDonorScreen}
+        name="ApplyDonor"
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
         component={SettingsScreen}
         name="Settings"
         options={{ headerShown: false }}
@@ -74,6 +82,11 @@ export function AppNavigator() {
         options={{ headerShown: false }}
       />
       <Stack.Screen
+        component={ReportSafetyScreen}
+        name="ReportSafety"
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
         component={SettingsDetailScreen}
         name="SettingsDetail"
         options={{ headerShown: false }}
@@ -81,6 +94,11 @@ export function AppNavigator() {
       <Stack.Screen
         component={DonorRequestDetailScreen}
         name="DonorRequestDetail"
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        component={DonorPreScreeningScreen}
+        name="DonorPreScreening"
         options={{ headerShown: false }}
       />
       <Stack.Screen

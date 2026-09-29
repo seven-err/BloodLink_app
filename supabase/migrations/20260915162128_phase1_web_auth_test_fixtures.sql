@@ -1,0 +1,2 @@
+-- Historical remote migration placeholder only.
+-- Temporary fixtures are intentionally not recreated in local schema/data.

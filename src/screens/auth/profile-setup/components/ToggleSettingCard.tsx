@@ -29,7 +29,7 @@ export function ToggleSettingCard({
       <Switch
         accessibilityLabel={title}
         thumbColor={colors.primaryForeground}
-        trackColor={{ false: colors.border, true: colors.primary }}
+        trackColor={{ false: colors.border, true: colors.success }}
         value={value}
         onValueChange={onValueChange}
       />

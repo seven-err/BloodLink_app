@@ -61,6 +61,37 @@ export const messagesStyles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 16,
   },
+  filterRow: {
+    backgroundColor: colors.background,
+    borderRadius: radii.pill,
+    flexDirection: 'row',
+    gap: 4,
+    padding: 4,
+  },
+  filterTab: {
+    alignItems: 'center',
+    borderRadius: radii.pill,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 36,
+  },
+  filterTabActive: {
+    backgroundColor: colors.card,
+  },
+  filterLabel: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  filterLabelActive: {
+    color: colors.foreground,
+    fontWeight: '700',
+  },
+  hint: {
+    color: colors.mutedLight,
+    fontSize: 12,
+    lineHeight: 16,
+  },
   title: {
     color: colors.foreground,
     fontSize: 22,

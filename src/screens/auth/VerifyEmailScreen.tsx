@@ -29,11 +29,11 @@ import { openMailApp } from '@/utils/authRedirect';
 
 import { AuthBackButton } from './AuthBackButton';
 import { AuthBrand } from './AuthBrand';
-import { SecurityFooter } from './SecurityFooter';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'VerifyEmail'>;
 
 const RESEND_COOLDOWN_SECONDS = 60;
+const EMAIL_OTP_LENGTH = 8;
 
 export function VerifyEmailScreen({ navigation, route }: Props) {
   const { email, resent = false } = route.params;
@@ -73,8 +73,10 @@ export function VerifyEmailScreen({ navigation, route }: Props) {
   };
 
   const onVerifyCode = async (otpCode = code) => {
-    if (otpCode.length < 6) {
-      setError('Please enter the full 6-digit code sent to your email.');
+    if (otpCode.length < EMAIL_OTP_LENGTH) {
+      setError(
+        `Please enter the full ${EMAIL_OTP_LENGTH}-digit code sent to your email.`,
+      );
       return;
     }
 
@@ -103,7 +105,7 @@ export function VerifyEmailScreen({ navigation, route }: Props) {
 
   const onCodeChange = (nextCode: string) => {
     setCode(nextCode);
-    if (nextCode.length === 6) {
+    if (nextCode.length === EMAIL_OTP_LENGTH) {
       void onVerifyCode(nextCode);
     }
   };
@@ -154,7 +156,7 @@ export function VerifyEmailScreen({ navigation, route }: Props) {
 
         <View style={styles.heroCard}>
           <View style={styles.iconCircle}>
-            <Mail color={colors.primary} size={36} strokeWidth={2.2} />
+            <Mail color={colors.info} size={36} strokeWidth={2.2} />
           </View>
 
           <Text style={styles.title}>
@@ -162,11 +164,12 @@ export function VerifyEmailScreen({ navigation, route }: Props) {
           </Text>
 
           <Text style={styles.subtitle}>
-            We sent a verification link and 6-digit confirmation code to:
+            We sent a verification link and {EMAIL_OTP_LENGTH}-digit confirmation
+            code to:
           </Text>
 
           <View style={styles.emailBadge}>
-            <Mail color={colors.primary} size={15} />
+            <Mail color={colors.muted} size={15} />
             <Text numberOfLines={1} style={styles.emailText}>
               {email}
             </Text>
@@ -205,19 +208,22 @@ export function VerifyEmailScreen({ navigation, route }: Props) {
 
           <View style={styles.dividerRow}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerLabel}>OR ENTER 6-DIGIT CODE</Text>
+            <Text style={styles.dividerLabel}>
+              OR ENTER {EMAIL_OTP_LENGTH}-DIGIT CODE
+            </Text>
             <View style={styles.dividerLine} />
           </View>
 
           <View style={styles.otpSection}>
             <OtpInput
               error={error ?? undefined}
+              length={EMAIL_OTP_LENGTH}
               value={code}
               onChange={onCodeChange}
             />
 
             <PrimaryButton
-              disabled={code.length < 6}
+              disabled={code.length < EMAIL_OTP_LENGTH}
               loading={loading}
               title="Verify Code"
               onPress={() => void onVerifyCode()}
@@ -226,7 +232,7 @@ export function VerifyEmailScreen({ navigation, route }: Props) {
 
           <View style={styles.infoBox}>
             <View style={styles.infoIconWrap}>
-              <Info color={colors.primary} size={16} />
+              <Info color={colors.info} size={16} />
             </View>
             <Text style={styles.infoText}>
               Clicking the confirmation button in your email will automatically
@@ -247,7 +253,7 @@ export function VerifyEmailScreen({ navigation, route }: Props) {
                 onPress={() => void onResend()}
               >
                 <RefreshCw
-                  color={colors.primary}
+                  color={colors.foreground}
                   size={14}
                   style={resendLoading ? styles.spinning : null}
                 />
@@ -268,10 +274,9 @@ export function VerifyEmailScreen({ navigation, route }: Props) {
           <Text style={styles.backToLoginText}>
             Already confirmed? <Text style={styles.backToLoginBold}>Log In</Text>
           </Text>
-          <ArrowRight color={colors.primary} size={16} />
+          <ArrowRight color={colors.muted} size={16} />
         </Pressable>
 
-        <SecurityFooter />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -286,7 +291,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   backToLoginBold: {
-    color: colors.primary,
+    color: colors.foreground,
     fontWeight: '700',
   },
   backToLoginText: {
@@ -357,7 +362,7 @@ const styles = StyleSheet.create({
   },
   emailBadge: {
     alignItems: 'center',
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.background,
     borderColor: colors.borderAccent,
     borderRadius: radii.pill,
     borderWidth: 1,
@@ -368,7 +373,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   emailText: {
-    color: colors.primaryDark,
+    color: colors.foreground,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -383,7 +388,7 @@ const styles = StyleSheet.create({
   },
   iconCircle: {
     alignItems: 'center',
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.infoSoft,
     borderColor: colors.borderAccent,
     borderRadius: radii.pill,
     borderWidth: 1.5,
@@ -394,7 +399,7 @@ const styles = StyleSheet.create({
   },
   infoBox: {
     alignItems: 'flex-start',
-    backgroundColor: colors.backgroundTint,
+    backgroundColor: colors.infoSoft,
     borderColor: colors.border,
     borderRadius: 12,
     borderWidth: 1,
@@ -459,7 +464,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   resendLinkText: {
-    color: colors.primary,
+    color: colors.foreground,
     fontSize: 14,
     fontWeight: '600',
   },

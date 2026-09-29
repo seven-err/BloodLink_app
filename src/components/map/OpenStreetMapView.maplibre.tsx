@@ -140,7 +140,7 @@ export const OpenStreetMapView = forwardRef<OpenStreetMapViewHandle, OpenStreetM
             const isSelected = selectedMarkerId === marker.id;
             const pinColor = isSelected
               ? (marker.selectedPinColor ?? colors.primaryDark)
-              : (marker.pinColor ?? colors.primary);
+              : (marker.pinColor ?? colors.muted);
 
             return (
               <Marker
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 5,
     borderRightColor: 'transparent',
     borderRightWidth: 5,
-    borderTopColor: colors.primary,
+    borderTopColor: colors.muted,
     borderTopWidth: 5,
     height: 0,
     marginTop: -1,

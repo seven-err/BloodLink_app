@@ -1,17 +1,17 @@
-import { Eye, EyeOff, Lock, Mail, Phone, ShieldCheck, User } from 'lucide-react-native';
+import { Eye, EyeOff, Lock, Mail, Phone, User } from 'lucide-react-native';
 import { StyleSheet, Text } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 import { colors } from '@/constants/theme';
 
-type AuthIconName = 'email' | 'lock' | 'phone' | 'user' | 'shield-check';
+type AuthIconName = 'email' | 'lock' | 'phone' | 'user';
 
 type IconProps = {
   name: AuthIconName;
 };
 
 export const AuthIcon = ({ name }: IconProps) => {
-  const color = colors.primary;
+  const color = colors.muted;
   const size = 20;
 
   switch (name) {
@@ -23,8 +23,6 @@ export const AuthIcon = ({ name }: IconProps) => {
       return <Phone color={color} size={size} />;
     case 'user':
       return <User color={color} size={size} />;
-    case 'shield-check':
-      return <ShieldCheck color={color} size={size} />;
     default:
       return null;
   }

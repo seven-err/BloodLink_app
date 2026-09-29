@@ -6,11 +6,26 @@ export const hemieStyles = StyleSheet.create({
   chatBody: {
     backgroundColor: colors.background,
     flex: 1,
+    minHeight: 0,
   },
   chatContent: {
     gap: 16,
     padding: 24,
     paddingBottom: 12,
+  },
+  errorText: {
+    backgroundColor: colors.warningSoft,
+    borderRadius: radii.card,
+    color: colors.warningText,
+    fontSize: 13,
+    lineHeight: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  footerDisclaimer: {
+    color: colors.muted,
+    fontSize: 11,
+    lineHeight: 15,
   },
   disclaimer: {
     backgroundColor: colors.primaryTint,
@@ -46,13 +61,8 @@ export const hemieStyles = StyleSheet.create({
     backgroundColor: colors.card,
     borderTopColor: colors.border,
     borderTopWidth: 1,
-    bottom: 0,
-    gap: 10,
-    left: 0,
     paddingHorizontal: 24,
     paddingTop: 10,
-    position: 'absolute',
-    right: 0,
   },
   footer: {
     gap: 10,
@@ -105,6 +115,8 @@ export const hemieStyles = StyleSheet.create({
   screen: {
     backgroundColor: colors.background,
     flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
   },
   sendButton: {
     alignItems: 'center',

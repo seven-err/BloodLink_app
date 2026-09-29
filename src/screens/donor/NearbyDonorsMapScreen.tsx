@@ -324,7 +324,7 @@ export function NearbyDonorsMapScreen({ navigation }: Props) {
             title: donor.fullName,
             description: `${donor.bloodType} · ${donor.isAvailable ? 'Available' : 'Unavailable'}`,
             bloodType: donor.bloodType,
-            pinColor: donor.isAvailable ? colors.success : colors.primary,
+            pinColor: donor.isAvailable ? colors.success : colors.muted,
             selectedPinColor: colors.primaryDark,
           },
         ];
@@ -502,7 +502,7 @@ export function NearbyDonorsMapScreen({ navigation }: Props) {
             onPress={() => setFilterModalVisible(true)}
           >
             <SlidersHorizontal
-              color={hasActiveFilters ? colors.primary : colors.muted}
+              color={hasActiveFilters ? colors.foreground : colors.muted}
               size={18}
               strokeWidth={2.25}
             />
@@ -555,7 +555,7 @@ export function NearbyDonorsMapScreen({ navigation }: Props) {
 
         {loading && !refreshing && originCoordinates ? (
           <View style={nearbyDonorsMapStyles.mapLoadingBadge}>
-            <ActivityIndicator color={colors.primary} size="small" />
+            <ActivityIndicator color={colors.muted} size="small" />
             <Text style={nearbyDonorsMapStyles.mapLoadingText}>{copy.loadingLabel}</Text>
           </View>
         ) : null}
@@ -612,7 +612,7 @@ export function NearbyDonorsMapScreen({ navigation }: Props) {
               onPress={() => void handleRefresh()}
             >
               {refreshing ? (
-                <ActivityIndicator color={colors.primary} size="small" />
+                <ActivityIndicator color={colors.muted} size="small" />
               ) : (
                 <RefreshCw color={colors.foreground} size={20} strokeWidth={2.25} />
               )}
@@ -754,7 +754,7 @@ export function NearbyDonorsMapScreen({ navigation }: Props) {
               onPress={() => setListModalVisible(true)}
             >
               <View style={nearbyDonorsMapStyles.summaryRow}>
-                <Users color={colors.primary} size={22} strokeWidth={2.25} />
+                <Users color={colors.muted} size={22} strokeWidth={2.25} />
                 <View style={nearbyDonorsMapStyles.summaryTextBlock}>
                   <Text style={nearbyDonorsMapStyles.summaryTitle}>
                     {copy.summaryTitle(visibleDonors.length)}
@@ -888,7 +888,7 @@ export function NearbyDonorsMapScreen({ navigation }: Props) {
           <Text style={nearbyDonorsMapStyles.visibilityTitle}>Available only</Text>
           <Switch
             thumbColor={colors.card}
-            trackColor={{ false: colors.border, true: colors.primary }}
+            trackColor={{ false: colors.border, true: colors.success }}
             value={availableOnly}
             onValueChange={setAvailableOnly}
           />
@@ -929,7 +929,7 @@ export function NearbyDonorsMapScreen({ navigation }: Props) {
               <Switch
                 disabled={mapVisibilityLoading}
                 thumbColor={colors.card}
-                trackColor={{ false: colors.border, true: colors.primary }}
+                trackColor={{ false: colors.border, true: colors.success }}
                 value={profile?.visible_on_map ?? false}
                 onValueChange={(value) => void handleMapVisibilityToggle(value)}
               />

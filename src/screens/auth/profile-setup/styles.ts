@@ -63,7 +63,7 @@ export const profileSetupStyles = StyleSheet.create({
   },
   documentChip: {
     alignItems: 'center',
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.background,
     borderRadius: radii.pill,
     flexDirection: 'row',
     gap: 8,
@@ -71,7 +71,7 @@ export const profileSetupStyles = StyleSheet.create({
     paddingVertical: 8,
   },
   documentChipText: {
-    color: colors.primaryDark,
+    color: colors.foreground,
     flex: 1,
     fontSize: 13,
     fontWeight: '600',
@@ -111,7 +111,7 @@ export const profileSetupStyles = StyleSheet.create({
     width: 96,
   },
   progressSegment: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.foreground,
     height: '100%',
   },
   progressTrack: {

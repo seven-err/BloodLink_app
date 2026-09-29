@@ -1,14 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-  Animated,
-  type LayoutChangeEvent,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Droplet, HeartHandshake } from 'lucide-react-native';
+import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 
+import { modeHighlightProgress } from '@/components/common/modeSwitchMotion';
 import { colors, radii, shadows } from '@/constants/theme';
 import { useUserMode, type UserMode } from '@/context/UserModeContext';
 
@@ -29,34 +23,25 @@ type ModeToggleProps = {
 
 export function ModeToggle({ showHint = false }: ModeToggleProps) {
   const { mode, setMode } = useUserMode();
-  const [containerWidth, setContainerWidth] = useState(0);
+  const segmentWidth = useSharedValue(0);
 
-  const targetIndex = mode === 'request' ? 1 : 0;
-  const animValue = useRef(new Animated.Value(targetIndex)).current;
-
-  useEffect(() => {
-    Animated.spring(animValue, {
-      toValue: targetIndex,
-      useNativeDriver: true,
-      damping: 24,
-      stiffness: 280,
-      mass: 0.8,
-    }).start();
-  }, [animValue, targetIndex]);
-
-  const handleLayout = (e: LayoutChangeEvent) => {
-    const width = e.nativeEvent.layout.width;
-    if (width > 0 && width !== containerWidth) {
-      setContainerWidth(width);
+  const handleLayout = (event: LayoutChangeEvent) => {
+    const width = event.nativeEvent.layout.width;
+    if (width > 0) {
+      segmentWidth.value = (width - 6) / 2;
     }
   };
 
-  const segmentWidth = containerWidth > 0 ? (containerWidth - 6) / 2 : 0;
+  const indicatorStyle = useAnimatedStyle(() => ({
+    opacity: segmentWidth.value > 0 ? 1 : 0,
+    width: segmentWidth.value,
+    transform: [{ translateX: modeHighlightProgress.value * segmentWidth.value }],
+  }));
 
-  const translateX = animValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, segmentWidth],
-  });
+  const donateActiveStyle = useAnimatedStyle(() => ({ opacity: 1 - modeHighlightProgress.value }));
+  const donateInactiveStyle = useAnimatedStyle(() => ({ opacity: modeHighlightProgress.value }));
+  const requestActiveStyle = useAnimatedStyle(() => ({ opacity: modeHighlightProgress.value }));
+  const requestInactiveStyle = useAnimatedStyle(() => ({ opacity: 1 - modeHighlightProgress.value }));
 
   return (
     <View style={styles.wrap}>
@@ -67,30 +52,12 @@ export function ModeToggle({ showHint = false }: ModeToggleProps) {
         style={styles.container}
       >
         {/* Animated Sliding Pill Background */}
-        {segmentWidth > 0 && (
-          <Animated.View
-            style={[
-              styles.slidingIndicator,
-              {
-                width: segmentWidth,
-                transform: [{ translateX }],
-              },
-            ]}
-          />
-        )}
+        <Animated.View pointerEvents="none" style={[styles.slidingIndicator, indicatorStyle]} />
 
-        {MODE_OPTIONS.map(({ icon: Icon, label, mode: optionMode }, index) => {
+        {MODE_OPTIONS.map(({ icon: Icon, label, mode: optionMode }) => {
           const isSelected = mode === optionMode;
-
-          const activeOpacity = animValue.interpolate({
-            inputRange: [0, 1],
-            outputRange: index === 0 ? [1, 0] : [0, 1],
-          });
-
-          const inactiveOpacity = animValue.interpolate({
-            inputRange: [0, 1],
-            outputRange: index === 0 ? [0, 1] : [1, 0],
-          });
+          const activeStyle = optionMode === 'donate' ? donateActiveStyle : requestActiveStyle;
+          const inactiveStyle = optionMode === 'donate' ? donateInactiveStyle : requestInactiveStyle;
 
           return (
             <Pressable
@@ -98,29 +65,17 @@ export function ModeToggle({ showHint = false }: ModeToggleProps) {
               accessibilityLabel={`${label} mode`}
               accessibilityRole="tab"
               accessibilityState={{ selected: isSelected }}
-              style={({ pressed }) => [
-                styles.segment,
-                pressed ? styles.segmentPressed : null,
-              ]}
+              style={styles.segment}
               onPress={() => setMode(optionMode)}
             >
-              {/* Inactive state layer (grey) */}
-              <Animated.View
-                pointerEvents="none"
-                style={[styles.segmentContent, { opacity: inactiveOpacity }]}
-              >
+              <Animated.View pointerEvents="none" style={[styles.segmentContent, inactiveStyle]}>
                 <Icon color={colors.muted} size={16} strokeWidth={2.25} />
                 <Text style={styles.labelInactive}>{label}</Text>
               </Animated.View>
 
-              {/* Active state layer (white bold) */}
               <Animated.View
                 pointerEvents="none"
-                style={[
-                  styles.segmentContent,
-                  styles.segmentContentAbsolute,
-                  { opacity: activeOpacity },
-                ]}
+                style={[styles.segmentContent, styles.segmentContentAbsolute, activeStyle]}
               >
                 <Icon color={colors.primaryForeground} size={16} strokeWidth={2.5} />
                 <Text style={styles.labelActive}>{label}</Text>
@@ -143,7 +98,7 @@ export function ModeToggle({ showHint = false }: ModeToggleProps) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#e2e8f0',
+    backgroundColor: colors.border,
     borderRadius: radii.pill,
     flexDirection: 'row',
     height: 44,
@@ -187,9 +142,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 0,
     top: 0,
-  },
-  segmentPressed: {
-    opacity: 0.85,
   },
   slidingIndicator: {
     backgroundColor: colors.primary,

@@ -78,7 +78,7 @@ export const donorHomeStyles = StyleSheet.create({
     fontWeight: '800',
   },
   header: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.background,
     borderBottomColor: colors.border,
     borderBottomWidth: 1,
     paddingBottom: 16,
@@ -95,14 +95,14 @@ export const donorHomeStyles = StyleSheet.create({
   },
   iconButton: {
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.card,
     borderRadius: 999,
     height: 40,
     justifyContent: 'center',
     width: 40,
   },
   linkText: {
-    color: colors.primary,
+    color: colors.muted,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -113,7 +113,7 @@ export const donorHomeStyles = StyleSheet.create({
     padding: 16,
   },
   notificationDot: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.info,
     borderColor: colors.card,
     borderRadius: 999,
     borderWidth: 2,
@@ -148,14 +148,16 @@ export const donorHomeStyles = StyleSheet.create({
   },
   avatarBox: {
     alignItems: 'center',
-    backgroundColor: colors.primary,
+    backgroundColor: colors.card,
+    borderColor: colors.border,
     borderRadius: 999,
+    borderWidth: 1,
     height: 42,
     justifyContent: 'center',
     width: 42,
   },
   avatarText: {
-    color: colors.primaryForeground,
+    color: colors.foreground,
     fontSize: 14,
     fontWeight: '700',
   },

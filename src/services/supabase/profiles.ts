@@ -141,7 +141,18 @@ export const isDonorRecipientProfileComplete = (profile: Profile) => {
     return false;
   }
 
-  return Boolean(profile.full_name?.trim());
+  // Google and email signups store a name before the user chooses a role.
+  // Setup is finished only after they complete the wizard.
+  if (profile.onboarding_completed === true) {
+    return Boolean(profile.full_name?.trim());
+  }
+
+  if (profile.onboarding_completed === false) {
+    return false;
+  }
+
+  // Cached profiles from before the flag existed.
+  return Boolean(profile.blood_type && profile.full_name?.trim());
 };
 
 export const isProfileComplete = (profile: Profile) => {
@@ -184,8 +195,13 @@ export const completeProfile = async ({
         longitude: longitude ?? null,
         weight_kg: role === 'donor' ? weightKg ?? null : null,
         last_donation_at: role === 'donor' ? lastDonationAt ?? null : null,
-        is_available: role === 'donor' ? Boolean(isAvailable) : false,
-        visible_on_map: role === 'donor' && latitude != null && longitude != null,
+        is_available: false,
+        // Stay off the donor map until verification. Turning this on here
+        // fails the map guard and rolls back role setup.
+        visible_on_map: false,
+        // Donors finish onboarding only after the preliminary history
+        // questionnaire is submitted. Existing completed donors are untouched.
+        onboarding_completed: role === 'recipient',
         ...(phone?.trim() ? { phone: phone.trim() } : {}),
       },
       {
@@ -195,26 +211,13 @@ export const completeProfile = async ({
     .select()
     .single();
 
-  if (result.error) {
-    return result;
+  if (!result.error && role === 'donor' && isAvailable) {
+    // Availability guard reads the saved row, so this has to follow the profile write.
+    await setDonorAvailability(userId, true);
   }
 
-  if (role === 'donor') {
-    // Immediately verify donor upon registration, bypassing pending and rejected
-    await supabase
-      .from('donor_verifications')
-      .insert({
-        donor_id: userId,
-        status: 'approved',
-        document_path: 'auto-verified',
-        notes: 'Automatically verified upon registration (bypass mode)',
-        reviewed_by: userId,
-        reviewed_at: new Date().toISOString(),
-      })
-      .select()
-      .maybeSingle();
-  }
-
+  // Donor verification rows are staff/admin-managed. Do not client-insert
+  // auto-approved bypass records here (Phase 10 hardening).
   return result;
 };
 

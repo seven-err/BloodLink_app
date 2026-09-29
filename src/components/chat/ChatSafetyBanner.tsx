@@ -39,7 +39,7 @@ export function ChatSafetyBanner({ onVisibilityChange }: ChatSafetyBannerProps) 
   return (
     <View style={chatStyles.disclaimer}>
       <View style={chatStyles.disclaimerRow}>
-        <Info color={colors.primary} size={18} />
+        <Info color={colors.info} size={18} />
         <Text style={chatStyles.disclaimerText}>
           <Text style={chatStyles.disclaimerLabel}>Secure chat: </Text>
           {CHAT_SAFETY_BANNER_TEXT}

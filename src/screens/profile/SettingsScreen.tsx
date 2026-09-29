@@ -12,8 +12,10 @@ import {
   MessageSquare,
   Moon,
   Shield,
+  Smartphone,
   Trash2,
   UserRound,
+  Flag,
 } from 'lucide-react-native';
 import { Alert, ScrollView, Text, View } from 'react-native';
 
@@ -33,6 +35,7 @@ import {
 import {
   getNotificationPreferences,
   updateNotificationPreferences,
+  NOTIFICATION_PREFERENCE_DEFAULTS,
   type NotificationPreferences,
 } from '@/services/supabase/notificationPreferences';
 import { getHighAccuracyPosition } from '@/services/location/getHighAccuracyPosition';
@@ -47,12 +50,8 @@ const APP_VERSION = '1.0.0';
 
 const DEFAULT_NOTIFICATION_PREFS: Pick<
   NotificationPreferences,
-  'push_enabled' | 'emergency_alerts' | 'message_notifications'
-> = {
-  push_enabled: true,
-  emergency_alerts: true,
-  message_notifications: true,
-};
+  'push_enabled' | 'emergency_alerts' | 'message_notifications' | 'sms_enabled'
+> = { ...NOTIFICATION_PREFERENCE_DEFAULTS };
 
 export function SettingsScreen({ navigation }: Props) {
   const { profile, refreshProfile, session } = useAuth();
@@ -97,6 +96,7 @@ export function SettingsScreen({ navigation }: Props) {
         push_enabled: data.push_enabled,
         emergency_alerts: data.emergency_alerts,
         message_notifications: data.message_notifications,
+        sms_enabled: data.sms_enabled ?? false,
       });
       setNotificationError(null);
     }
@@ -111,6 +111,14 @@ export function SettingsScreen({ navigation }: Props) {
     value: boolean,
   ) => {
     if (!session?.user.id || notificationLoadingKey) {
+      return;
+    }
+
+    if (key === 'sms_enabled' && value && !profile?.phone?.trim()) {
+      Alert.alert(
+        'Phone number required',
+        'Add a verified phone number to your profile before enabling SMS alerts.',
+      );
       return;
     }
 
@@ -138,6 +146,7 @@ export function SettingsScreen({ navigation }: Props) {
         push_enabled: data.push_enabled,
         emergency_alerts: data.emergency_alerts,
         message_notifications: data.message_notifications,
+        sms_enabled: data.sms_enabled ?? false,
       });
     }
 
@@ -262,6 +271,7 @@ export function SettingsScreen({ navigation }: Props) {
           <SettingsRow
             icon={<MessageSquare color={colors.foreground} size={22} strokeWidth={1.75} />}
             label="Message Notifications"
+            showDivider
             subtitle="Chat and coordination messages"
             trailing={
               <SettingsToggle
@@ -270,6 +280,23 @@ export function SettingsScreen({ navigation }: Props) {
                 onValueChange={(value) =>
                   void handleNotificationToggle('message_notifications', value)
                 }
+              />
+            }
+            showChevron={false}
+          />
+          <SettingsRow
+            icon={<Smartphone color={colors.foreground} size={22} strokeWidth={1.75} />}
+            label="SMS Alerts"
+            subtitle={
+              profile?.phone?.trim()
+                ? 'Text alerts for urgent matches and donations'
+                : 'Requires a phone number on your profile'
+            }
+            trailing={
+              <SettingsToggle
+                disabled={notificationLoadingKey === 'sms_enabled'}
+                value={notificationPrefs.sms_enabled}
+                onValueChange={(value) => void handleNotificationToggle('sms_enabled', value)}
               />
             }
             showChevron={false}
@@ -297,6 +324,18 @@ export function SettingsScreen({ navigation }: Props) {
         </SettingsSection>
 
         <SettingsSection title="Privacy & Security">
+          <SettingsRow
+            icon={<Flag color={colors.foreground} size={22} strokeWidth={1.75} />}
+            label="Report a concern"
+            showDivider
+            subtitle="Use the flag icon in chat to report a person"
+            onPress={() =>
+              openDetail(
+                'Report a concern',
+                'Open a BloodLink chat conversation and tap the flag icon to report suspicious activity, harassment, impersonation, false eligibility, or false emergency calls. Administrators review reports in the Safety & Moderation queue.',
+              )
+            }
+          />
           <SettingsRow
             icon={<Shield color={colors.foreground} size={22} strokeWidth={1.75} />}
             label="Privacy Settings"
@@ -335,7 +374,7 @@ export function SettingsScreen({ navigation }: Props) {
           />
           {isDonor ? (
             <SettingsRow
-              icon={<MapPin color={colors.primary} size={22} strokeWidth={1.75} />}
+              icon={<MapPin color={colors.foreground} size={22} strokeWidth={1.75} />}
               label="Show on Donor Map"
               subtitle="Let verified users see your GPS pin on the map"
               trailing={

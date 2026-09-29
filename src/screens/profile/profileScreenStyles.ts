@@ -5,14 +5,14 @@ import { colors, radii, shadows } from '@/constants/theme';
 export const profileScreenStyles = StyleSheet.create({
   avatar: {
     alignItems: 'center',
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.background,
     borderRadius: 999,
     height: 72,
     justifyContent: 'center',
     width: 72,
   },
   avatarInitials: {
-    color: colors.primary,
+    color: colors.foreground,
     fontSize: 24,
     fontWeight: '800',
   },
@@ -48,7 +48,7 @@ export const profileScreenStyles = StyleSheet.create({
   },
   contactIconWrap: {
     alignItems: 'center',
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.background,
     borderRadius: 999,
     height: 40,
     justifyContent: 'center',
@@ -121,7 +121,7 @@ export const profileScreenStyles = StyleSheet.create({
   },
   donationIconWrap: {
     alignItems: 'center',
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.background,
     borderRadius: 999,
     height: 36,
     justifyContent: 'center',
@@ -210,7 +210,7 @@ export const profileScreenStyles = StyleSheet.create({
   },
   availabilityCard: {
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background,
     borderRadius: 12,
     flex: 1.3,
     flexDirection: 'row',
@@ -218,9 +218,6 @@ export const profileScreenStyles = StyleSheet.create({
     minHeight: 46,
     minWidth: 0,
     paddingHorizontal: 10,
-  },
-  availabilityCardActive: {
-    backgroundColor: colors.successSoft,
   },
   availabilityCopy: {
     flex: 1,
@@ -287,7 +284,7 @@ export const profileScreenStyles = StyleSheet.create({
     fontWeight: '800',
   },
   linkText: {
-    color: colors.primary,
+    color: colors.muted,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -308,7 +305,7 @@ export const profileScreenStyles = StyleSheet.create({
   },
   menuBadge: {
     alignItems: 'center',
-    backgroundColor: colors.primary,
+    backgroundColor: colors.info,
     borderRadius: 999,
     height: 22,
     justifyContent: 'center',
@@ -322,7 +319,7 @@ export const profileScreenStyles = StyleSheet.create({
   },
   menuIconWrap: {
     alignItems: 'center',
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.background,
     borderRadius: 999,
     height: 40,
     justifyContent: 'center',

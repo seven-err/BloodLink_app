@@ -31,6 +31,7 @@ import {
   normalizeAccountPhone,
   type AccountSettingsFormValues,
 } from '@/utils/accountSettingsValidation';
+import { PH_MOBILE_PLACEHOLDER } from '@/utils/phone';
 import { editProfileStyles } from './editProfileStyles';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'AccountSettings'>;
@@ -222,9 +223,9 @@ export function AccountSettingsScreen({ navigation }: Props) {
               <RequestFormField
                 error={errors.phone?.message}
                 keyboardType="phone-pad"
-                label={initialPhone ? 'Phone Number' : 'Add Phone Number'}
+                label={initialPhone ? 'Philippine mobile number' : 'Add Philippine mobile number'}
                 leftIcon={<Phone color={colors.mutedLight} size={18} />}
-                placeholder="+63 9XX XXX XXXX"
+                placeholder={PH_MOBILE_PLACEHOLDER}
                 value={value}
                 onBlur={onBlur}
                 onChangeText={onChange}

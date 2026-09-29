@@ -1,7 +1,7 @@
-import { ArrowRight, HeartHandshake, MapPin, MessageCircle, Phone } from 'lucide-react-native';
+import { ArrowRight, HeartHandshake, MapPin, MessageCircle } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { fontFamilies, shadows } from '@/constants/theme';
+import { colors, fontFamilies, shadows } from '@/constants/theme';
 import type { BloodRequestUrgency } from '@/types/database';
 
 type UrgentRequestCardProps = {
@@ -9,8 +9,7 @@ type UrgentRequestCardProps = {
   distanceLabel: string;
   hospitalName?: string;
   unitsNeeded?: number;
-  onCall?: () => void;
-  onChat?: () => void;
+  onChat: () => void;
   onDetails: () => void;
   onRespond: () => void;
   timeLabel?: string;
@@ -27,13 +26,13 @@ const URGENCY_CONFIG: Record<
   }
 > = {
   critical: {
-    tagBg: '#FEE2E2',
-    tagText: '#DC2626',
+    tagBg: colors.criticalSoft,
+    tagText: colors.critical,
     tagLabel: 'CRITICAL',
   },
   urgent: {
-    tagBg: '#FFEDD5',
-    tagText: '#EA580C',
+    tagBg: colors.orangeSoft,
+    tagText: colors.orangeText,
     tagLabel: 'URGENT',
   },
   normal: {
@@ -48,7 +47,6 @@ export function UrgentRequestCard({
   distanceLabel,
   hospitalName,
   unitsNeeded = 1,
-  onCall,
   onChat,
   onDetails,
   onRespond,
@@ -101,7 +99,7 @@ export function UrgentRequestCard({
         </View>
       </View>
 
-      {/* Action Row: Donate Button + Call, Chat, Info Icon Buttons */}
+      {/* Action Row: Donate Button + Chat and Details */}
       <View style={styles.actionRow}>
         <Pressable
           accessibilityLabel="Donate to this blood request"
@@ -114,19 +112,10 @@ export function UrgentRequestCard({
         </Pressable>
 
         <Pressable
-          accessibilityLabel="Call hospital or requester"
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.iconButton, pressed ? styles.buttonPressed : null]}
-          onPress={onCall ?? onDetails}
-        >
-          <Phone color="#0F172A" size={16} strokeWidth={2.25} />
-        </Pressable>
-
-        <Pressable
           accessibilityLabel="Chat with requester"
           accessibilityRole="button"
           style={({ pressed }) => [styles.iconButton, pressed ? styles.buttonPressed : null]}
-          onPress={onChat ?? onDetails}
+          onPress={onChat}
         >
           <MessageCircle color="#0F172A" size={16} strokeWidth={2.25} />
         </Pressable>
@@ -184,7 +173,7 @@ const styles = StyleSheet.create({
   },
   donateButton: {
     alignItems: 'center',
-    backgroundColor: '#DC2626',
+    backgroundColor: colors.donate,
     borderRadius: 10,
     flex: 1,
     flexDirection: 'row',

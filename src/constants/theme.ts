@@ -12,6 +12,11 @@ export const colors = {
   primaryForeground: '#ffffff',
   primarySoft: '#fee2e2',
   primaryTint: '#fff7f7',
+  /** Donate / respond. Same red as Request Blood so help actions share one color. */
+  donate: '#dc2626',
+  /** Critical urgency label. Deeper rose so it is not the same red as action buttons. */
+  critical: '#9f1239',
+  criticalSoft: '#ffe4e6',
   success: '#10b981',
   successSoft: '#dcfce7',
   warning: '#f59e0b',

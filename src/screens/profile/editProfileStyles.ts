@@ -128,7 +128,7 @@ export const editProfileStyles = StyleSheet.create({
     fontWeight: '600',
   },
   contactLink: {
-    color: colors.primary,
+    color: colors.foreground,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -142,7 +142,7 @@ export const editProfileStyles = StyleSheet.create({
   },
   profilePictureAction: {
     alignItems: 'center',
-    backgroundColor: colors.primaryTint,
+    backgroundColor: colors.background,
     borderRadius: 14,
     flexDirection: 'row',
     gap: 10,
@@ -151,7 +151,7 @@ export const editProfileStyles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   profilePictureActionText: {
-    color: colors.primary,
+    color: colors.foreground,
     fontSize: 15,
     fontWeight: '700',
   },

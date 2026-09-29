@@ -94,7 +94,7 @@ export const myDonationsStyles = StyleSheet.create({
   },
   emptyIconWrap: {
     alignItems: 'center',
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.background,
     borderRadius: 999,
     height: 56,
     justifyContent: 'center',
@@ -184,7 +184,7 @@ export const myDonationsStyles = StyleSheet.create({
   },
   qrActionBtn: {
     alignItems: 'center',
-    backgroundColor: colors.primaryTint,
+    backgroundColor: colors.background,
     borderRadius: 10,
     flexDirection: 'row',
     gap: 8,
@@ -293,7 +293,7 @@ export const myDonationsStyles = StyleSheet.create({
     paddingVertical: 3,
   },
   urgencyBadgeCritical: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.criticalSoft,
   },
   urgencyBadgeNormal: {
     backgroundColor: '#f1f5f9',
@@ -304,7 +304,7 @@ export const myDonationsStyles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   urgencyBadgeTextCritical: {
-    color: colors.primary,
+    color: colors.critical,
   },
   urgencyBadgeTextNormal: {
     color: colors.muted,

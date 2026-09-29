@@ -126,10 +126,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   destructiveButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primarySoft,
   },
   destructiveLabel: {
-    color: colors.primaryForeground,
+    color: colors.primaryDark,
     fontSize: 15,
     fontWeight: '700',
   },

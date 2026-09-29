@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { normalizePhoneNumber } from '@/utils/phone';
+import { isPhilippineMobile, normalizePhoneNumber, PH_MOBILE_ERROR } from '@/utils/phone';
 
 export const accountSettingsSchema = z.object({
   email: z
@@ -13,8 +13,8 @@ export const accountSettingsSchema = z.object({
   phone: z
     .string()
     .trim()
-    .refine((value) => value.length === 0 || value.replace(/\D/g, '').length >= 10, {
-      message: 'Enter a valid phone number.',
+    .refine((value) => value.length === 0 || isPhilippineMobile(value), {
+      message: PH_MOBILE_ERROR,
     }),
 });
 

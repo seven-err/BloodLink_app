@@ -1,6 +1,6 @@
 import type { EmailOtpType, User } from '@supabase/supabase-js';
 
-import { getAuthRedirectUrl } from '@/utils/authRedirect';
+import { getAuthRedirectUrl, getPasswordRecoveryRedirectUrl } from '@/utils/authRedirect';
 
 import { supabase } from './client';
 import {
@@ -88,10 +88,18 @@ export const verifyOtpWithTokenHash = (
 export const signInWithEmail = (email: string, password: string) =>
   supabase.auth.signInWithPassword({ email, password });
 
+export const requestPasswordReset = (email: string) =>
+  supabase.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: getPasswordRecoveryRedirectUrl(),
+  });
+
+export const updatePassword = (password: string) =>
+  supabase.auth.updateUser({ password });
+
 /**
  * Continue with Google.
- * Native: in-app account picker (requires a build with Google Sign-In linked).
- * Web: browser OAuth.
+ * Android and web: browser OAuth (no Android SHA-1 required).
+ * iOS: native account picker when configured, otherwise the same OAuth flow.
  */
 export const signInWithGoogle = (): Promise<GoogleSignInResult> => signInWithGooglePlatform();
 

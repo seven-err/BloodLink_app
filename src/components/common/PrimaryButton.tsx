@@ -1,10 +1,12 @@
 import type { PressableProps } from 'react-native';
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
 
+import { colors } from '@/constants/theme';
+
 type PrimaryButtonProps = PressableProps & {
   title: string;
   loading?: boolean;
-  variant?: 'primary' | 'secondary';
+  variant?: 'primary' | 'secondary' | 'donate';
 };
 
 export function PrimaryButton({
@@ -22,14 +24,18 @@ export function PrimaryButton({
       disabled={isDisabled}
       style={[
         styles.button,
-        variant === 'secondary' ? styles.secondary : styles.primary,
+        variant === 'secondary'
+          ? styles.secondary
+          : variant === 'donate'
+            ? styles.donate
+            : styles.primary,
         isDisabled ? styles.disabled : null,
         typeof style === 'function' ? undefined : style,
       ]}
       {...props}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'secondary' ? '#b91c1c' : '#fff'} />
+        <ActivityIndicator color={variant === 'secondary' ? colors.foreground : colors.primaryForeground} />
       ) : (
         <Text
           style={[
@@ -56,16 +62,19 @@ const styles = StyleSheet.create({
     opacity: 0.65,
   },
   primary: {
-    backgroundColor: '#e50914',
+    backgroundColor: colors.primary,
   },
   primaryTitle: {
-    color: '#fff',
+    color: colors.primaryForeground,
+  },
+  donate: {
+    backgroundColor: colors.donate,
   },
   secondary: {
-    backgroundColor: '#fee2e2',
+    backgroundColor: colors.border,
   },
   secondaryTitle: {
-    color: '#b91c1c',
+    color: colors.foreground,
   },
   title: {
     fontSize: 16,

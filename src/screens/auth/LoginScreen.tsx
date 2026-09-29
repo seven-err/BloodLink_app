@@ -1,10 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Phone } from 'lucide-react-native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
-  Alert,
   KeyboardAvoidingView,
   Pressable,
   ScrollView,
@@ -18,6 +17,7 @@ import { PrimaryButton } from '@/components/common/PrimaryButton';
 import { FormTextInput } from '@/components/forms/FormTextInput';
 import { colors } from '@/constants/theme';
 import { useGoogleSignIn } from '@/hooks/useGoogleSignIn';
+import { consumePendingAuthError, rememberAuthEntry } from '@/navigation/authReturnRoute';
 import type { AuthStackParamList } from '@/navigation/types';
 import { signInWithEmail } from '@/services/supabase/auth';
 import { getLoginErrorMessage } from '@/utils/loginErrors';
@@ -26,7 +26,6 @@ import { AuthBrand } from './AuthBrand';
 import { AuthDivider } from './AuthDivider';
 import { AuthIcon, MutedIcon, SocialIcon } from './icons';
 import { AuthTabs } from './AuthTabs';
-import { SecurityFooter } from './SecurityFooter';
 import { SocialButton } from './SocialButton';
 import { authStyles } from './styles';
 
@@ -62,6 +61,15 @@ export function LoginScreen({ navigation }: Props) {
   });
 
   const displayError = error ?? googleError;
+
+  useEffect(() => {
+    rememberAuthEntry('Login');
+    const pending = consumePendingAuthError();
+
+    if (pending) {
+      setError(getLoginErrorMessage(pending));
+    }
+  }, []);
 
   const onSubmit = async ({ email, password }: FormValues) => {
     setError(null);
@@ -156,12 +164,7 @@ export function LoginScreen({ navigation }: Props) {
           />
           <Pressable
             style={styles.forgotContainer}
-            onPress={() =>
-              Alert.alert(
-                'Password reset',
-                'Use phone OTP login for this demo, or contact support to reset your password.',
-              )
-            }
+            onPress={() => navigation.navigate('ForgotPassword')}
           >
             <Text style={styles.forgot}>Forgot Password?</Text>
           </Pressable>
@@ -173,7 +176,6 @@ export function LoginScreen({ navigation }: Props) {
             onPress={handleSubmit(onSubmit)}
           />
         </View>
-        <SecurityFooter />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -193,7 +195,7 @@ const styles = StyleSheet.create({
     marginTop: -4,
   },
   forgot: {
-    color: colors.primary,
+    color: colors.foreground,
     fontSize: 13,
   },
   form: {

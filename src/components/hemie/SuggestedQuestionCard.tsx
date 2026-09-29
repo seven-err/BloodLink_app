@@ -10,6 +10,7 @@ type SuggestedQuestionCardProps = {
 export function SuggestedQuestionCard({ onPress, question }: SuggestedQuestionCardProps) {
   return (
     <Pressable
+      accessibilityLabel={question}
       accessibilityRole="button"
       style={({ pressed }) => [styles.card, pressed ? styles.pressed : null]}
       onPress={onPress}

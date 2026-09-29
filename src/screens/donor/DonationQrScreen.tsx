@@ -1,7 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, Check } from 'lucide-react-native';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
@@ -15,9 +15,13 @@ import type { AppStackParamList } from '@/navigation/types';
 import { authStyles } from '@/screens/auth/styles';
 import { recipientStyles } from '@/screens/recipient/styles';
 import {
+  describeDonationVerification,
+  getDonationForDonor,
   getDonationQrDetailsForDonor,
+  isVerifiedCompletedDonation,
   type DonationQrDetails,
 } from '@/services/supabase/donations';
+import { subscribeToDonation } from '@/services/supabase/realtime';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'DonationQr'>;
 
@@ -40,29 +44,58 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 
 function QrSuccessView({ details }: { details: DonationQrDetails }) {
   const { donation, summary, payloadText } = details;
+  const isCompleted = isVerifiedCompletedDonation(donation.status);
+  const showQr = donation.status === 'scheduled';
 
   return (
     <>
       <View style={recipientStyles.card}>
-        <Text style={recipientStyles.eyebrow}>Verification QR</Text>
-        <Text style={recipientStyles.title}>Show this at collection</Text>
-        <Text style={recipientStyles.subtitle}>
-          Staff will scan this code to verify your donation match. It does not include patient or
-          contact details.
+        <Text style={recipientStyles.eyebrow}>
+          {isCompleted ? 'Recorded donation' : 'Donation completion QR'}
         </Text>
-        <View style={{ alignItems: 'center', paddingVertical: 16 }}>
+        <Text style={recipientStyles.title}>
+          {isCompleted ? 'Donation completion recorded' : 'Show this at collection'}
+        </Text>
+        <Text style={recipientStyles.subtitle}>
+          {describeDonationVerification(donation.status)}
+          {showQr
+            ? ' The code does not include patient or contact details, and this screen updates when staff confirm the donation.'
+            : ''}
+        </Text>
+        {isCompleted ? (
           <View
             style={{
-              backgroundColor: '#fff',
-              borderColor: colors.border,
-              borderRadius: 20,
-              borderWidth: 1,
-              padding: 16,
+              alignItems: 'center',
+              backgroundColor: colors.successSoft,
+              borderRadius: 16,
+              flexDirection: 'row',
+              gap: 8,
+              justifyContent: 'center',
+              paddingHorizontal: 16,
+              paddingVertical: 14,
             }}
           >
-            <QRCode size={220} value={payloadText} />
+            <Check color={colors.success} size={18} strokeWidth={3} />
+            <Text style={{ color: colors.success, fontSize: 15, fontWeight: '700' }}>
+              Collection staff recorded this donation as completed
+            </Text>
           </View>
-        </View>
+        ) : null}
+        {showQr ? (
+          <View style={{ alignItems: 'center', paddingVertical: 16 }}>
+            <View
+              style={{
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                borderRadius: 20,
+                borderWidth: 1,
+                padding: 16,
+              }}
+            >
+              <QRCode size={220} value={payloadText} />
+            </View>
+          </View>
+        ) : null}
       </View>
 
       <View style={recipientStyles.card}>
@@ -77,6 +110,9 @@ function QrSuccessView({ details }: { details: DonationQrDetails }) {
         <DetailRow label="Needed by" value={formatDateTime(summary.needed_at)} />
         <DetailRow label="Donation status" value={donation.status.replace('_', ' ')} />
         <DetailRow label="Scheduled" value={formatDateTime(donation.scheduled_at)} />
+        {donation.completed_at ? (
+          <DetailRow label="Verified at" value={formatDateTime(donation.completed_at)} />
+        ) : null}
       </View>
     </>
   );
@@ -141,6 +177,58 @@ export function DonationQrScreen({ navigation, route }: Props) {
       void loadQrDetails(true);
     }, [loadQrDetails]),
   );
+
+  const watchedDonationId = details?.donation.id;
+  const donationStatus = details?.donation.status;
+
+  useEffect(() => {
+    if (!donorId || !watchedDonationId || donationStatus !== 'scheduled') {
+      return;
+    }
+
+    let active = true;
+
+    const refreshStatus = async () => {
+      const { data, error: statusError } = await getDonationForDonor(watchedDonationId, donorId);
+
+      if (!active || statusError || !data || data.status === 'scheduled') {
+        return;
+      }
+
+      setDetails((current) => {
+        if (!current || current.donation.id !== data.id) {
+          return current;
+        }
+
+        const next: DonationQrDetails = {
+          ...current,
+          donation: {
+            ...current.donation,
+            status: data.status,
+            completed_at: data.completed_at,
+            units_donated: data.units_donated,
+            notes: data.notes,
+            updated_at: data.updated_at,
+          },
+        };
+        appCache.setSync(cacheKey, next);
+        return next;
+      });
+    };
+
+    const subscription = subscribeToDonation(watchedDonationId, () => {
+      void refreshStatus();
+    });
+    const timer = setInterval(() => {
+      void refreshStatus();
+    }, 4000);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+      subscription.stop();
+    };
+  }, [cacheKey, watchedDonationId, donationStatus, donorId]);
 
   if (loading) {
     return (

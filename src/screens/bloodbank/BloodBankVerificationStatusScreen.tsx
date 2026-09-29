@@ -27,10 +27,17 @@ export function BloodBankVerificationStatusScreen({ navigation }: Props) {
   return (
     <View style={styles.screen}>
       <View style={styles.card}>
-        <Text style={styles.eyebrow}>
+        <Text
+          style={[
+            styles.eyebrow,
+            status !== 'rejected' ? { color: colors.warningText } : null,
+          ]}
+        >
           {status === 'rejected' ? 'Action required' : 'Verification pending'}
         </Text>
-        <Text style={styles.title}>{title}</Text>
+        <Text style={[styles.title, status !== 'rejected' ? { color: colors.foreground } : null]}>
+          {title}
+        </Text>
         <Text style={styles.message}>{message}</Text>
         {bloodbankVerification ? (
           <View style={styles.meta}>
@@ -116,7 +123,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   screen: {
-    backgroundColor: colors.backgroundTint,
+    backgroundColor: colors.background,
     flex: 1,
     gap: 16,
     justifyContent: 'center',

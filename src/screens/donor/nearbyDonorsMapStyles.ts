@@ -169,7 +169,7 @@ export const nearbyDonorsMapStyles = StyleSheet.create({
     width: 36,
   },
   filterLink: {
-    color: colors.primary,
+    color: colors.muted,
     fontSize: 15,
     fontWeight: '700',
   },

@@ -2,7 +2,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Activity, AlertCircle, Bell, Clock, MapPin, MessageCircle, Plus, Users } from 'lucide-react-native';
+import { AlertCircle, Bell, Clock, FileText, Heart, MapPin, MessageCircle, Plus, Users } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -274,6 +274,13 @@ export function RecipientHomeScreen({ navigation }: Props) {
     navigation.getParent()?.navigate('NearbyDonorDetail', { donor });
   };
 
+  const openCreateBloodRequest = () => {
+    navigation.getParent()?.navigate(
+      'CreateBloodRequest',
+      profile?.blood_type ? { bloodType: profile.blood_type } : undefined,
+    );
+  };
+
   if (initialLoading && !hasLoadedOnceRef.current) {
     return <RecipientHomeSkeleton topInset={topInset} />;
   }
@@ -310,7 +317,25 @@ export function RecipientHomeScreen({ navigation }: Props) {
           </Pressable>
         </View>
         <View style={recipientHomeStyles.modeToggleRow}>
-          <ModeToggle showHint={false} />
+          {profile?.role === 'recipient' ? (
+            <Pressable
+              accessibilityRole="button"
+              style={recipientHomeStyles.applyDonorCard}
+              onPress={() => navigation.getParent()?.navigate('ApplyDonor')}
+            >
+              <View style={recipientHomeStyles.applyDonorIcon}>
+                <Heart color={colors.primary} size={18} />
+              </View>
+              <View style={recipientHomeStyles.applyDonorCopy}>
+                <Text style={recipientHomeStyles.applyDonorTitle}>Apply as a donor</Text>
+                <Text style={recipientHomeStyles.applyDonorBody}>
+                  Donor tools are hidden on a recipient account. Please proceed to donor setup to donate blood.
+                </Text>
+              </View>
+            </Pressable>
+          ) : (
+            <ModeToggle showHint={false} />
+          )}
         </View>
       </View>
 
@@ -351,8 +376,8 @@ export function RecipientHomeScreen({ navigation }: Props) {
             style={recipientHomeStyles.quickItem}
             onPress={() => navigation.getParent()?.navigate('CreateBloodRequest')}
           >
-            <View style={[recipientHomeStyles.quickIconButton, { backgroundColor: colors.primarySoft }]}>
-              <Plus color={colors.primary} size={22} strokeWidth={2.5} />
+            <View style={[recipientHomeStyles.quickIconButton, { backgroundColor: colors.background }]}>
+              <Plus color={colors.foreground} size={22} strokeWidth={2.5} />
             </View>
             <Text style={recipientHomeStyles.quickLabel}>New Request</Text>
           </Pressable>
@@ -364,7 +389,7 @@ export function RecipientHomeScreen({ navigation }: Props) {
             onPress={() => navigation.navigate('Requests')}
           >
             <View style={[recipientHomeStyles.quickIconButton, { backgroundColor: colors.infoSoft }]}>
-              <Activity color={colors.info} size={22} strokeWidth={2.25} />
+              <FileText color={colors.info} size={22} strokeWidth={2.25} />
               {activeRequestCount > 0 ? (
                 <View style={recipientHomeStyles.quickBadge}>
                   <Text style={recipientHomeStyles.quickBadgeText}>{activeRequestCount}</Text>
@@ -403,14 +428,14 @@ export function RecipientHomeScreen({ navigation }: Props) {
 
         <View style={recipientHomeStyles.statRow}>
           <DonorStatCard
-            icon={<Users color={colors.primary} size={20} />}
+            icon={<Users color={colors.muted} size={20} />}
             label="Active Requests"
             subtext="Being processed"
             subtextColor={colors.info}
             value={String(activeRequestCount)}
           />
           <DonorStatCard
-            icon={<Clock color={colors.primary} size={20} />}
+            icon={<Clock color={colors.muted} size={20} />}
             label="Nearby Donors"
             subtext={`within ${NEARBY_RADIUS_KM} km`}
             value={String(nearbyDonors.length)}
@@ -460,7 +485,7 @@ export function RecipientHomeScreen({ navigation }: Props) {
                 name={donor.fullName}
                 timeLabel={donor.timeLabel}
                 onDetails={() => openDonorDetail(donor)}
-                onRequest={() => openDonorDetail(donor)}
+                onRequest={openCreateBloodRequest}
               />
             ))
           )}

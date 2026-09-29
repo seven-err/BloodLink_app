@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { MapPin, Users } from 'lucide-react-native';
 import { Alert, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -8,45 +7,80 @@ import { BloodTypeBadge } from '@/components/bloodRequest/BloodTypeBadge';
 import { PrimaryButton } from '@/components/common/PrimaryButton';
 import { DonorVerificationBadge } from '@/components/donor/DonorVerificationBadge';
 import { SettingsScreenHeader } from '@/components/settings/SettingsScreenHeader';
-import { colors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import type { AppStackParamList } from '@/navigation/types';
 import { nearbyDonorDetailStyles } from '@/screens/donor/nearbyDonorDetailStyles';
 import { getMyBloodRequests, type BloodRequest } from '@/services/supabase/bloodRequests';
-import { isDonorCompatibleWithRecipient } from '@/utils/bloodTypeCompatibility';
+import { getBloodTypeCompatibilityLabel, isDonorCompatibleWithRecipient } from '@/utils/bloodTypeCompatibility';
 import { resolveDonorVerificationDisplay } from '@/utils/donorVerificationDisplay';
 import { formatLastDonationLabel } from '@/utils/donorMapDisplay';
+import { getDonorEligibilityStat } from '@/utils/donorDonationStats';
 import { formatDistance } from '@/utils/travelMetrics';
-import { openMapDirections } from '@/utils/mapDirections';
 import { appCache } from '@/utils/appCache';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'NearbyDonorDetail'>;
+
+function DetailRow({
+  isLast = false,
+  label,
+  value,
+}: {
+  isLast?: boolean;
+  label: string;
+  value: string;
+}) {
+  return (
+    <View
+      style={[
+        nearbyDonorDetailStyles.detailRow,
+        isLast ? nearbyDonorDetailStyles.detailRowLast : null,
+      ]}
+    >
+      <Text style={nearbyDonorDetailStyles.detailLabel}>{label}</Text>
+      <Text style={nearbyDonorDetailStyles.detailValue}>{value}</Text>
+    </View>
+  );
+}
+
+function formatEligibility(lastDonationAt: string | null) {
+  const eligibility = getDonorEligibilityStat(lastDonationAt);
+
+  if (eligibility.value === 'Now') {
+    return 'Eligible now';
+  }
+
+  return `${eligibility.value} ${eligibility.label.toLowerCase()}`;
+}
 
 export function NearbyDonorDetailScreen({ navigation, route }: Props) {
   const { top: topInset } = useSafeAreaInsets();
   const { profile, session } = useAuth();
   const { donor } = route.params;
   const [coordinating, setCoordinating] = useState(false);
+  const displayName = donor.fullName?.trim() || 'BloodLink donor';
   const verificationStatus = resolveDonorVerificationDisplay({
     verificationActive: donor.isVerified,
   });
   const isRecipient = profile?.role === 'recipient';
-  const isDonor = profile?.role === 'donor';
-
+  const viewerBloodType = profile?.blood_type ?? null;
   const donorCompatibleWithRecipient =
-    profile?.blood_type != null
-      ? isDonorCompatibleWithRecipient(donor.bloodType, profile.blood_type)
+    viewerBloodType != null
+      ? isDonorCompatibleWithRecipient(donor.bloodType, viewerBloodType)
       : true;
+  const lastDonation = formatLastDonationLabel(donor.lastDonationAt).replace(
+    /^Last donation:\s*/i,
+    '',
+  );
 
   const handleRecipientCoordinate = useCallback(async () => {
     if (!session?.user.id || coordinating) {
       return;
     }
 
-    if (profile?.blood_type && !donorCompatibleWithRecipient) {
+    if (viewerBloodType && !donorCompatibleWithRecipient) {
       Alert.alert(
         'Blood type mismatch',
-        `${donor.fullName} (${donor.bloodType}) is not compatible with your blood type (${profile.blood_type}). Browse the map for other donors.`,
+        `${displayName} (${donor.bloodType}) is not compatible with your blood type (${viewerBloodType}). Browse the map for other donors.`,
       );
       return;
     }
@@ -95,34 +129,29 @@ export function NearbyDonorDetailScreen({ navigation, route }: Props) {
     }
 
     navigation.navigate('CreateBloodRequest', {
-      bloodType: profile?.blood_type ?? undefined,
+      bloodType: viewerBloodType ?? undefined,
     });
     setCoordinating(false);
   }, [
     coordinating,
+    displayName,
     donor.bloodType,
-    donor.fullName,
     donorCompatibleWithRecipient,
     navigation,
-    profile?.blood_type,
     session?.user.id,
+    viewerBloodType,
   ]);
-
-  const handleDonorBrowseRequests = () => {
-    navigation.navigate('AppTabs', { screen: 'Requests' });
-  };
 
   return (
     <View style={nearbyDonorDetailStyles.screen}>
-      <SettingsScreenHeader title="Donor Profile" onBack={() => navigation.goBack()} />
+      <SettingsScreenHeader title="Donor Details" onBack={() => navigation.goBack()} />
 
       <ScrollView contentContainerStyle={nearbyDonorDetailStyles.scrollContent}>
         <View style={[nearbyDonorDetailStyles.heroCard, { marginTop: topInset > 0 ? 0 : 8 }]}>
           <View style={nearbyDonorDetailStyles.heroTop}>
             <View style={nearbyDonorDetailStyles.avatarShell}>
               <Text style={nearbyDonorDetailStyles.avatarText}>
-                {donor.fullName
-                  .trim()
+                {displayName
                   .split(/\s+/)
                   .slice(0, 2)
                   .map((part) => part[0] ?? '')
@@ -133,81 +162,77 @@ export function NearbyDonorDetailScreen({ navigation, route }: Props) {
             <View style={nearbyDonorDetailStyles.heroCopy}>
               <View style={nearbyDonorDetailStyles.nameRow}>
                 <Text numberOfLines={1} style={nearbyDonorDetailStyles.name}>
-                  {donor.fullName}
+                  {displayName}
                 </Text>
                 <DonorVerificationBadge status={verificationStatus} />
               </View>
-            </View>
-          </View>
-
-          <View style={nearbyDonorDetailStyles.badgeRow}>
-            <BloodTypeBadge bloodType={donor.bloodType} size="lg" variant="solid" />
-            <View
-              style={[
-                nearbyDonorDetailStyles.statusPill,
-                donor.isAvailable
-                  ? nearbyDonorDetailStyles.statusPillAvailable
-                  : nearbyDonorDetailStyles.statusPillUnavailable,
-              ]}
-            >
-              <Text
-                style={[
-                  nearbyDonorDetailStyles.statusPillText,
-                  donor.isAvailable
-                    ? nearbyDonorDetailStyles.statusPillTextAvailable
-                    : nearbyDonorDetailStyles.statusPillTextUnavailable,
-                ]}
-              >
-                {donor.isAvailable ? 'Available now' : 'Currently unavailable'}
-              </Text>
+              <View style={nearbyDonorDetailStyles.badgeRow}>
+                <BloodTypeBadge bloodType={donor.bloodType} size="lg" variant="solid" />
+                <View
+                  style={[
+                    nearbyDonorDetailStyles.statusPill,
+                    donor.isAvailable
+                      ? nearbyDonorDetailStyles.statusPillAvailable
+                      : nearbyDonorDetailStyles.statusPillUnavailable,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      nearbyDonorDetailStyles.statusPillText,
+                      donor.isAvailable
+                        ? nearbyDonorDetailStyles.statusPillTextAvailable
+                        : nearbyDonorDetailStyles.statusPillTextUnavailable,
+                    ]}
+                  >
+                    {donor.isAvailable ? 'Available now' : 'Currently unavailable'}
+                  </Text>
+                </View>
+              </View>
             </View>
           </View>
         </View>
 
-        <View style={nearbyDonorDetailStyles.statsCard}>
-          <View style={nearbyDonorDetailStyles.statRow}>
-            <MapPin color={colors.primary} size={20} strokeWidth={2} />
-            <View style={nearbyDonorDetailStyles.statCopy}>
-              <Text style={nearbyDonorDetailStyles.statLabel}>Distance</Text>
-              <Text style={nearbyDonorDetailStyles.statValue}>
-                {formatDistance(donor.distanceMeters)}
-              </Text>
-            </View>
+        <View style={nearbyDonorDetailStyles.section}>
+          <Text style={nearbyDonorDetailStyles.sectionTitle}>Donor Details</Text>
+          <View style={nearbyDonorDetailStyles.detailsCard}>
+            <DetailRow label="Blood type" value={donor.bloodType} />
+            <DetailRow
+              label="Status"
+              value={donor.isAvailable ? 'Available now' : 'Currently unavailable'}
+            />
+            <DetailRow label="Distance" value={formatDistance(donor.distanceMeters)} />
+            <DetailRow
+              label="Donations"
+              value={`${donor.donationCount} completed`}
+            />
+            <DetailRow label="Last donation" value={lastDonation} />
+            <DetailRow label="Eligibility" value={formatEligibility(donor.lastDonationAt)} />
+            <DetailRow
+              label="Can donate to"
+              value={getBloodTypeCompatibilityLabel(donor.bloodType)}
+            />
+            <DetailRow
+              label="Verification"
+              value={donor.isVerified ? 'Verified donor' : 'Verification pending'}
+            />
+            {viewerBloodType ? (
+              <DetailRow
+                isLast
+                label="Compatible with you"
+                value={donorCompatibleWithRecipient ? `Yes, for ${viewerBloodType}` : `No, not for ${viewerBloodType}`}
+              />
+            ) : (
+              <DetailRow isLast label="Compatible with you" value="Set your blood type in profile" />
+            )}
           </View>
-
-          <View style={nearbyDonorDetailStyles.statRow}>
-            <Users color={colors.primary} size={20} strokeWidth={2} />
-            <View style={nearbyDonorDetailStyles.statCopy}>
-              <Text style={nearbyDonorDetailStyles.statLabel}>Completed donations</Text>
-              <Text style={nearbyDonorDetailStyles.statValue}>
-                {donor.donationCount} donation{donor.donationCount === 1 ? '' : 's'}
-              </Text>
-            </View>
-          </View>
-
-          <Text style={nearbyDonorDetailStyles.lastDonation}>
-            {formatLastDonationLabel(donor.lastDonationAt)}
-          </Text>
-
-          <PrimaryButton
-            title="Get directions to donor location"
-            variant="secondary"
-            onPress={() =>
-              openMapDirections({
-                latitude: donor.latitude,
-                longitude: donor.longitude,
-                label: donor.fullName,
-              })
-            }
-          />
         </View>
 
         <View style={nearbyDonorDetailStyles.noticeCard}>
           <Text style={nearbyDonorDetailStyles.noticeTitle}>Privacy notice</Text>
           <Text style={nearbyDonorDetailStyles.noticeText}>
-            {isRecipient
-              ? 'Contact details stay hidden until you accept a donor response on your blood request. Use the button below to open or create a request so donors like this one can respond safely.'
-              : 'Exact contact details stay hidden on the map. Coordinate through BloodLink requests and chat after a match is accepted.'}
+            Phone number and exact location stay hidden until a match is accepted. Use a blood
+            request to coordinate. Turn-by-turn directions to this donor are not available from
+            this screen.
           </Text>
         </View>
 
@@ -218,9 +243,9 @@ export function NearbyDonorDetailScreen({ navigation, route }: Props) {
               loading={coordinating}
               onPress={() => void handleRecipientCoordinate()}
             />
-            {!donorCompatibleWithRecipient && profile?.blood_type ? (
+            {!donorCompatibleWithRecipient && viewerBloodType ? (
               <Text style={nearbyDonorDetailStyles.actionHint}>
-                This donor is not compatible with your {profile.blood_type} blood type.
+                This donor is not compatible with your {viewerBloodType} blood type.
               </Text>
             ) : (
               <Text style={nearbyDonorDetailStyles.actionHint}>
@@ -231,15 +256,17 @@ export function NearbyDonorDetailScreen({ navigation, route }: Props) {
           </View>
         ) : null}
 
-        {isDonor ? (
-          <View style={nearbyDonorDetailStyles.actions}>
-            <PrimaryButton
-              title="Browse blood requests"
-              variant="secondary"
-              onPress={handleDonorBrowseRequests}
-            />
-          </View>
-        ) : null}
+        <PrimaryButton
+          title="Report this donor"
+          variant="secondary"
+          onPress={() =>
+            navigation.navigate('ReportSafety', {
+              defaultType: 'user',
+              reportedDisplayName: displayName,
+              reportedUserId: donor.donorId,
+            })
+          }
+        />
       </ScrollView>
     </View>
   );

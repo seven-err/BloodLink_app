@@ -1,78 +1,38 @@
-import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 
-import hemieImage from '@/assets/images/hemie.png';
-import { colors, shadows } from '@/constants/theme';
+import { HEMIE_LOGO_ASPECT, HemieLogo } from '@/components/hemie/HemieLogo';
 
 type HemieFloatingButtonProps = {
   onPress: () => void;
 };
 
-const BUTTON_SIZE = 72;
-const RING_SIZE = BUTTON_SIZE;
-const IMAGE_SIZE = 54;
+const LOGO_WIDTH = 55;
+const LOGO_HEIGHT = Math.round(LOGO_WIDTH / HEMIE_LOGO_ASPECT);
 
 export function HemieFloatingButton({ onPress }: HemieFloatingButtonProps) {
   return (
     <Pressable
       accessibilityLabel="Open Hemie AI assistant"
       accessibilityRole="button"
+      hitSlop={8}
       style={({ pressed }) => [styles.button, pressed ? styles.pressed : null]}
       onPress={onPress}
     >
-      <View style={styles.shadow}>
-        <View style={styles.ring}>
-          <View style={styles.imageClip}>
-            <Image resizeMode="cover" source={hemieImage} style={styles.image} />
-          </View>
-        </View>
-      </View>
+      <HemieLogo height={LOGO_HEIGHT} width={LOGO_WIDTH} />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   button: {
-    bottom: 24,
-    height: BUTTON_SIZE,
+    bottom: 20,
+    overflow: 'visible',
     position: 'absolute',
-    right: 20,
-    width: BUTTON_SIZE,
+    right: 16,
     zIndex: 20,
-  },
-  image: {
-    height: IMAGE_SIZE,
-    width: IMAGE_SIZE,
-  },
-  imageClip: {
-    alignItems: 'center',
-    backgroundColor: '#000',
-    borderRadius: IMAGE_SIZE / 2,
-    height: IMAGE_SIZE,
-    justifyContent: 'center',
-    overflow: 'hidden',
-    width: IMAGE_SIZE,
   },
   pressed: {
     opacity: 0.94,
     transform: [{ scale: 0.96 }],
-  },
-  ring: {
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderColor: colors.border,
-    borderRadius: RING_SIZE / 2,
-    borderWidth: 1, // Softened border
-    height: RING_SIZE,
-    justifyContent: 'center',
-    width: RING_SIZE,
-  },
-  shadow: {
-    borderRadius: RING_SIZE / 2,
-    ...shadows.card,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { height: 2, width: 0 },
-    shadowOpacity: 0.02,
-    shadowRadius: 8,
   },
 });

@@ -102,7 +102,7 @@ openai_api_key = "env(OPENAI_API_KEY)"
 
 # Email testing server. Emails sent with the local dev setup are not actually sent - rather, they
 # are monitored, and you can view the emails that would have been sent from the web interface.
-[local_smtp]
+[inbucket]
 enabled = true
 # Port to use for the email testing server web interface.
 port = 54324
@@ -223,13 +223,13 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
-max_frequency = "1s"
+max_frequency = "60s"
 # Number of characters used in the email OTP.
-otp_length = 6
+otp_length = 8
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
@@ -416,3 +416,19 @@ enabled = true
 # Auth Send SMS Hook calls this function with a webhook signature (not a user JWT).
 [functions.send-sms]
 verify_jwt = false
+
+# Database Webhook on notifications INSERT; auth via x-alert-sms-secret header.
+[functions.send-alert-sms]
+verify_jwt = false
+
+# Signed-in app chat. The Groq key stays in function secrets, never in the APK.
+[functions.hemie-chat]
+verify_jwt = true
+
+# Admin advisory insights. Same Groq secret as hemie-chat; JWT + admin role required.
+[functions.admin-ai-insights]
+verify_jwt = true
+
+# Admin sends a real emergency shortage alert (in-app + SMS + push).
+[functions.send-emergency-alert]
+verify_jwt = true

@@ -13,7 +13,7 @@ export function SettingsToggle({ disabled = false, onValueChange, value }: Setti
     <Switch
       disabled={disabled}
       thumbColor={colors.card}
-      trackColor={{ false: colors.border, true: colors.primary }}
+      trackColor={{ false: colors.border, true: colors.success }}
       value={value}
       onValueChange={onValueChange}
     />

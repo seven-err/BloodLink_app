@@ -9,6 +9,7 @@ import {
   Check,
   ChevronRight,
   CircleHelp,
+  ClipboardCheck,
   Droplet,
   LogOut,
   QrCode,
@@ -36,7 +37,10 @@ import type { AppTabParamList } from '@/navigation/AppTabNavigator';
 import type { AppStackParamList } from '@/navigation/types';
 import { authStyles } from '@/screens/auth/styles';
 import { supabase } from '@/services/supabase/client';
+import { getLatestOwnDonorPreScreening } from '@/services/supabase/donorPreScreenings';
 import {
+  formatDonationVerificationStatus,
+  isVerifiedCompletedDonation,
   listDonorVerifiableItems,
   type DonorDonationListItem,
 } from '@/services/supabase/donations';
@@ -168,12 +172,9 @@ function RecentDonationRow({
   item: DonorDonationListItem;
   onPress?: () => void;
 }) {
-  const isCompleted =
-    item.donationStatus === 'completed' || item.matchStatus === 'completed';
+  const isCompleted = isVerifiedCompletedDonation(item.donationStatus);
 
-  const statusLabel = item.donationStatus
-    ? item.donationStatus.replace('_', ' ')
-    : item.matchStatus;
+  const statusLabel = formatDonationVerificationStatus(item.donationStatus, item.matchStatus);
 
   return (
     <Pressable
@@ -273,6 +274,9 @@ export function UserProfileScreen({ navigation }: Props) {
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const [availabilityOverride, setAvailabilityOverride] = useState<boolean | null>(null);
+  const [preScreening, setPreScreening] = useState<Awaited<
+    ReturnType<typeof getLatestOwnDonorPreScreening>
+  >['data']>(null);
 
   const isDonor = profile?.role === 'donor';
   const canEnableAvailability = canDonorEnableAvailability(profile, verificationActive);
@@ -359,15 +363,17 @@ export function UserProfileScreen({ navigation }: Props) {
         setTotalDonations(0);
         setResponseRate(null);
         setRecentDonations([]);
+        setPreScreening(null);
         return;
       }
 
-      const [donationsResult, verificationResult, latestVerificationResult, matchesResult] =
+      const [donationsResult, verificationResult, latestVerificationResult, matchesResult, preScreeningResult] =
         await Promise.all([
           listDonorVerifiableItems(session.user.id),
           isDonorVerificationActive(session.user.id),
           getLatestDonorVerification(session.user.id),
           supabase.from('donor_matches').select('status').eq('donor_id', session.user.id),
+          getLatestOwnDonorPreScreening(session.user.id),
         ]);
 
       if (donationsResult.error) {
@@ -385,6 +391,11 @@ export function UserProfileScreen({ navigation }: Props) {
       if (matchesResult.error) {
         throw matchesResult.error;
       }
+      if (preScreeningResult.error) {
+        throw preScreeningResult.error;
+      }
+
+      setPreScreening(preScreeningResult.data);
 
       const isVerificationActiveResult = Boolean(verificationResult.data);
       const resolvedStatus = resolveDonorVerificationDisplay({
@@ -395,8 +406,8 @@ export function UserProfileScreen({ navigation }: Props) {
       setVerificationActive(isVerificationActiveResult);
       setDonorVerificationStatus(resolvedStatus);
 
-      const completedDonations = (donationsResult.data ?? []).filter(
-        (item) => item.donationStatus === 'completed' || item.matchStatus === 'completed',
+      const completedDonations = (donationsResult.data ?? []).filter((item) =>
+        isVerifiedCompletedDonation(item.donationStatus),
       );
       setTotalDonations(completedDonations.length);
 
@@ -542,7 +553,7 @@ export function UserProfileScreen({ navigation }: Props) {
                   <View style={styles.statDivider} />
                   <View style={styles.statColumn}>
                     <Text style={
-                      responseRate != null && responseRate >= 80 ? styles.statValueSuccess : styles.statValuePrimary
+                      responseRate != null && responseRate >= 80 ? styles.statValueSuccess : styles.statValue
                     }>
                       {responseRate == null ? '\u2014' : `${responseRate}%`}
                     </Text>
@@ -567,12 +578,7 @@ export function UserProfileScreen({ navigation }: Props) {
 
                 {isDonor ? (
                   <>
-                    <View
-                      style={[
-                        styles.availabilityCard,
-                        isAvailable ? styles.availabilityCardActive : null,
-                      ]}
-                    >
+                    <View style={styles.availabilityCard}>
                       <View style={styles.availabilityCopy}>
                         <View style={styles.availabilityTitleRow}>
                           <Droplet
@@ -580,13 +586,7 @@ export function UserProfileScreen({ navigation }: Props) {
                             fill={isAvailable ? colors.primary : 'none'}
                             size={13}
                           />
-                          <Text
-                            numberOfLines={1}
-                            style={[
-                              styles.availabilityTitle,
-                              isAvailable ? { color: colors.success } : null,
-                            ]}
-                          >
+                          <Text numberOfLines={1} style={styles.availabilityTitle}>
                             Donate
                           </Text>
                         </View>
@@ -596,7 +596,7 @@ export function UserProfileScreen({ navigation }: Props) {
                         accessibilityState={{ checked: isAvailable, disabled: availabilityLoading }}
                         disabled={availabilityLoading}
                         thumbColor={colors.primaryForeground}
-                        trackColor={{ false: '#e2e8f0', true: colors.success }}
+                        trackColor={{ false: colors.border, true: colors.success }}
                         value={isAvailable}
                         onValueChange={(value) => {
                           void handleAvailabilityToggle(value);
@@ -631,24 +631,57 @@ export function UserProfileScreen({ navigation }: Props) {
 
 
 
+            {isDonor ? (
+              <Pressable
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.card, pressed ? { opacity: 0.8 } : null]}
+                onPress={() => navigateToStack('DonorPreScreening')}
+              >
+                <View style={styles.sectionHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <ClipboardCheck color={colors.primary} size={20} />
+                    <Text style={styles.cardTitle}>Donor Pre-Screening</Text>
+                  </View>
+                  <ChevronRight color={colors.mutedLight} size={20} />
+                </View>
+                <Text style={{ color: colors.success, fontSize: 14, fontWeight: '800' }}>
+                  {preScreening ? 'Pre-Screening Completed' : 'Not completed'}
+                </Text>
+                {preScreening ? (
+                  <Text style={styles.emptyDonationsText}>
+                    Last completed: {formatDonationDate(preScreening.completed_at)}
+                  </Text>
+                ) : null}
+                {preScreening?.requires_staff_review ? (
+                  <Text style={{ color: colors.warningText, fontSize: 13, fontWeight: '700' }}>
+                    Requires Blood Bank Assessment
+                  </Text>
+                ) : null}
+                <Text style={styles.emptyDonationsText}>
+                  Final donation eligibility requires assessment by authorized blood-bank or
+                  healthcare personnel. Tap to review or submit an updated questionnaire.
+                </Text>
+              </Pressable>
+            ) : null}
+
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Contact Information</Text>
               {email ? (
                 <ContactInfoRow
-                  icon={<Mail color={colors.primary} size={18} />}
+                  icon={<Mail color={colors.muted} size={18} />}
                   label="Email"
                   value={email}
                 />
               ) : null}
               {phone ? (
                 <ContactInfoRow
-                  icon={<Phone color={colors.primary} size={18} />}
+                  icon={<Phone color={colors.muted} size={18} />}
                   label="Phone"
                   value={phone}
                 />
               ) : null}
               <ContactInfoRow
-                icon={<MapPin color={colors.primary} size={18} />}
+                icon={<MapPin color={colors.muted} size={18} />}
                 label="Location"
                 value={location || 'Not set'}
               />
@@ -688,27 +721,27 @@ export function UserProfileScreen({ navigation }: Props) {
 
             <View style={styles.card}>
               <ProfileMenuRow
-                icon={<Bell color={colors.primary} size={18} />}
+                icon={<Bell color={colors.muted} size={18} />}
                 label="Notifications"
                 showDivider
                 onPress={() => navigateToStack('Notifications')}
               />
               <ProfileMenuRow
-                icon={<Shield color={colors.primary} size={18} />}
+                icon={<Shield color={colors.muted} size={18} />}
                 label="Privacy & Security"
                 showDivider={isDonor}
                 onPress={() => navigateToStack('Settings')}
               />
               {isDonor ? (
                 <ProfileMenuRow
-                  icon={<Award color={colors.primary} size={18} />}
+                  icon={<Award color={colors.muted} size={18} />}
                   label="Donation History"
                   showDivider
                   onPress={() => navigateToStack('MyDonations')}
                 />
               ) : null}
               <ProfileMenuRow
-                icon={<CircleHelp color={colors.primary} size={18} />}
+                icon={<CircleHelp color={colors.muted} size={18} />}
                 label="Help & Support"
                 onPress={() => navigateToStack('HemieAI')}
               />

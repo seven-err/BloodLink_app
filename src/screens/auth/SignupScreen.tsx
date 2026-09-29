@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Check, Circle, Phone } from 'lucide-react-native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import {
   KeyboardAvoidingView,
@@ -12,10 +12,12 @@ import {
 } from 'react-native';
 import { z } from 'zod';
 
+import { LegalAgreementText } from '@/components/common/LegalAgreementText';
 import { PrimaryButton } from '@/components/common/PrimaryButton';
 import { FormTextInput } from '@/components/forms/FormTextInput';
 import { colors } from '@/constants/theme';
 import { useGoogleSignIn } from '@/hooks/useGoogleSignIn';
+import { consumePendingAuthError, rememberAuthEntry } from '@/navigation/authReturnRoute';
 import type { AuthStackParamList } from '@/navigation/types';
 import {
   getSignupErrorMessage,
@@ -23,7 +25,8 @@ import {
   resendSignupConfirmation,
   signUpWithEmail,
 } from '@/services/supabase/auth';
-import { normalizePhoneNumber } from '@/utils/phone';
+import { getLoginErrorMessage } from '@/utils/loginErrors';
+import { normalizePhoneNumber, PH_MOBILE_PLACEHOLDER, philippineMobileSchema } from '@/utils/phone';
 import {
   getPasswordRequirementStatus,
   signupPasswordSchema,
@@ -32,7 +35,6 @@ import { AuthBrand } from './AuthBrand';
 import { AuthDivider } from './AuthDivider';
 import { AuthIcon, MutedIcon, SocialIcon } from './icons';
 import { AuthTabs } from './AuthTabs';
-import { SecurityFooter } from './SecurityFooter';
 import { SocialButton } from './SocialButton';
 import { authStyles } from './styles';
 
@@ -45,7 +47,7 @@ const schema = z
     firstName: z.string().min(1, 'First name is required.'),
     lastName: z.string().min(1, 'Last name is required.'),
     password: signupPasswordSchema,
-    phone: z.string().min(10, 'Enter a valid mobile number.'),
+    phone: philippineMobileSchema,
   })
   .refine((value) => value.password === value.confirmPassword, {
     message: 'Passwords do not match.',
@@ -85,6 +87,15 @@ export function SignupScreen({ navigation }: Props) {
   const passwordRequirements = getPasswordRequirementStatus(passwordValue);
   const showPasswordGuide = passwordValue.length > 0;
   const displayError = error ?? googleError;
+
+  useEffect(() => {
+    rememberAuthEntry('Signup');
+    const pending = consumePendingAuthError();
+
+    if (pending) {
+      setError(getLoginErrorMessage(pending));
+    }
+  }, []);
 
   const onSubmit = async ({
     email,
@@ -236,7 +247,7 @@ export function SignupScreen({ navigation }: Props) {
                 leftIcon={<AuthIcon name="phone" />}
                 onBlur={onBlur}
                 onChangeText={onChange}
-                placeholder="09xxxxxx"
+                placeholder={PH_MOBILE_PLACEHOLDER}
                 value={value}
               />
             )}
@@ -311,10 +322,10 @@ export function SignupScreen({ navigation }: Props) {
             onPress={handleSubmit(onSubmit)}
           />
         </View>
-        <SecurityFooter />
-        <Text style={styles.termsText}>
-          By signing up, you agree to our <Text style={styles.termsLink}>Terms of Service</Text> and <Text style={styles.termsLink}>Privacy Policy</Text>
-        </Text>
+        <LegalAgreementText
+          leadIn="By signing up, you agree to our"
+          onOpen={(document) => navigation.navigate('LegalDocument', { document })}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -377,15 +388,5 @@ const styles = StyleSheet.create({
   screen: {
     backgroundColor: colors.background,
     flex: 1,
-  },
-  termsText: {
-    color: colors.mutedLight,
-    fontSize: 12,
-    marginTop: 32,
-    paddingHorizontal: 20,
-    textAlign: 'center',
-  },
-  termsLink: {
-    color: colors.primary,
   },
 });

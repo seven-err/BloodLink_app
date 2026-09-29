@@ -30,9 +30,9 @@ export function BloodBankNavigator({ verificationStatus }: BloodBankNavigatorPro
     <Stack.Navigator
       initialRouteName={initialRouteName}
       screenOptions={{
-        contentStyle: { backgroundColor: colors.backgroundTint },
+        contentStyle: { backgroundColor: colors.background },
         headerShadowVisible: false,
-        headerTintColor: colors.primaryDark,
+        headerTintColor: colors.foreground,
       }}
     >
       <Stack.Screen

@@ -54,8 +54,8 @@ const STATUS_STYLES: Record<string, StatusStyle> = {
 };
 
 const DEFAULT_STYLE: StatusStyle = {
-  backgroundColor: colors.primarySoft,
-  color: colors.primaryDark,
+  backgroundColor: colors.background,
+  color: colors.muted,
 };
 
 type StatusBadgeProps = {

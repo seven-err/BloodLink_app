@@ -5,14 +5,14 @@ import { colors, radii, shadows } from '@/constants/theme';
 export const nearbyDonorDetailStyles = StyleSheet.create({
   avatarShell: {
     alignItems: 'center',
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.background,
     borderRadius: 999,
     height: 72,
     justifyContent: 'center',
     width: 72,
   },
   avatarText: {
-    color: colors.primary,
+    color: colors.muted,
     fontSize: 24,
     fontWeight: '800',
   },
@@ -38,10 +38,42 @@ export const nearbyDonorDetailStyles = StyleSheet.create({
     flexDirection: 'row',
     gap: 14,
   },
-  lastDonation: {
+  detailGrid: {
+    gap: 0,
+  },
+  detailLabel: {
     color: colors.muted,
-    fontSize: 14,
+    flex: 1,
+    fontSize: 13,
     fontWeight: '600',
+  },
+  detailRow: {
+    alignItems: 'flex-start',
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+  },
+  detailRowLast: {
+    borderBottomWidth: 0,
+    paddingBottom: 0,
+  },
+  detailValue: {
+    color: colors.foreground,
+    flex: 2,
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'right',
+  },
+  section: {
+    gap: 10,
+  },
+  sectionTitle: {
+    color: colors.foreground,
+    fontSize: 14,
+    fontWeight: '800',
   },
   name: {
     color: colors.foreground,
@@ -89,30 +121,12 @@ export const nearbyDonorDetailStyles = StyleSheet.create({
     padding: 24,
     paddingBottom: 32,
   },
-  statCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  statLabel: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  statRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
-  },
-  statValue: {
-    color: colors.foreground,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  statsCard: {
+  detailsCard: {
     backgroundColor: colors.card,
     borderRadius: radii.card,
-    gap: 16,
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 8,
     ...shadows.card,
   },
   statusPill: {

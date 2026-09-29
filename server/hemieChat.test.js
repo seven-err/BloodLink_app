@@ -7,9 +7,39 @@ const {
   getLocalHemieReply,
   getGroundedHemieReply,
   getLlmConfig,
+  isLlmConfigured,
   sanitizeContext,
   sanitizeMessages,
 } = require('./hemieChat');
+
+test('continues the donor guide when the user replies next', () => {
+  const reply = getLocalHemieReply('next', { role: 'donor', bloodType: 'O-', birthdate: '1995-06-15', weightKg: 65 }, [
+    { role: 'user', content: 'Am I eligible to donate?' },
+    { role: 'assistant', content: 'You meet the basic eligibility checks.' },
+    { role: 'user', content: 'next' },
+  ]);
+
+  assert.match(reply, /valid ID|healthy meal|water/i);
+  assert.match(reply, /Reply "next"/);
+  assert.doesNotMatch(reply, /universal donor/i);
+});
+
+test('answers donation preparation instead of blood type matching', () => {
+  const reply = getLocalHemieReply('what to do before i can donate', {
+    bloodType: 'O-',
+    role: 'donor',
+  });
+
+  assert.match(reply, /valid ID|healthy meal|water/i);
+  assert.doesNotMatch(reply, /universal|AB\+|red cells/i);
+});
+
+test('refuses questions outside blood donation and BloodLink', () => {
+  const reply = getLocalHemieReply('What is the capital of France?');
+
+  assert.match(reply, /only help with blood donation|BloodLink assistant/i);
+  assert.doesNotMatch(reply, /Paris/i);
+});
 
 test('refuses off-topic questions locally', () => {
   const reply = getLocalHemieReply('What is the weather today?');
@@ -96,9 +126,44 @@ test('sanitizeContext accepts lastDonationAt and isAvailable', () => {
   assert.equal(context.weightKg, 70);
 });
 
-test('getLlmConfig defaults to gemini-3.5-flash-lite with fallbacks', () => {
+test('isLlmConfigured rejects an empty or Ollama placeholder key', () => {
+  assert.equal(isLlmConfigured({}), false);
+  assert.equal(isLlmConfigured({ HEMIE_LLM_API_KEY: 'ollama' }), false);
+  assert.equal(isLlmConfigured({ HEMIE_LLM_API_KEY: 'test-key' }), true);
+});
+
+test('getLlmConfig defaults to Groq GPT-OSS 120B', () => {
   const config = getLlmConfig({
     HEMIE_LLM_API_KEY: 'test-key',
+  });
+
+  assert.equal(config.provider, 'groq');
+  assert.equal(config.baseUrl, 'https://api.groq.com/openai/v1');
+  assert.equal(config.models[0], 'openai/gpt-oss-120b');
+  assert.ok(config.models.includes('openai/gpt-oss-20b'));
+  assert.equal(config.models.some((model) => model.startsWith('gemini-')), false);
+});
+
+test('getLlmConfig replaces Ollama placeholders with Groq defaults', () => {
+  const config = getLlmConfig({
+    HEMIE_LLM_API_KEY: 'test-key',
+    HEMIE_LLM_BASE_URL: 'http://127.0.0.1:11434/v1',
+    HEMIE_LLM_MODEL: 'llama3.1',
+    HEMIE_LLM_FALLBACK_MODELS: 'gemini-3.5-flash,llama3',
+  });
+
+  assert.equal(config.provider, 'groq');
+  assert.equal(config.baseUrl, 'https://api.groq.com/openai/v1');
+  assert.equal(config.models[0], 'openai/gpt-oss-120b');
+  assert.equal(config.models.includes('llama3.1'), false);
+  assert.equal(config.models.includes('gemini-3.5-flash'), false);
+  assert.ok(config.models.includes('openai/gpt-oss-20b'));
+});
+
+test('getLlmConfig keeps an explicit Gemini override', () => {
+  const config = getLlmConfig({
+    HEMIE_LLM_API_KEY: 'test-key',
+    HEMIE_LLM_MODEL: 'gemini-3.5-flash-lite',
   });
 
   assert.equal(config.provider, 'gemini');
@@ -118,6 +183,65 @@ test('generateHemieReply uses grounded source when no API key', async () => {
   assert.match(result.reply, /all types|universal/i);
 });
 
+test('known answers stay grounded even when an LLM is configured', async () => {
+  let called = false;
+  const fetchImpl = async () => {
+    called = true;
+    return { ok: true, status: 200, json: async () => ({}) };
+  };
+
+  const result = await generateHemieReply({
+    messages: [{ role: 'user', content: 'what to do before i can donate' }],
+    context: { bloodType: 'O-', role: 'donor' },
+    env: { HEMIE_LLM_API_KEY: 'test-key' },
+    fetchImpl,
+  });
+
+  assert.equal(called, false);
+  assert.equal(result.source, 'grounded');
+  assert.match(result.reply, /valid ID|healthy meal/i);
+  assert.doesNotMatch(result.reply, /universal|red cells/i);
+});
+
+test('generateHemieReply calls Groq chat completions when configured', async () => {
+  const fetchImpl = async (url, options) => {
+    assert.equal(String(url), 'https://api.groq.com/openai/v1/chat/completions');
+    const body = JSON.parse(options.body);
+    assert.equal(body.model, 'openai/gpt-oss-120b');
+    assert.equal(body.temperature, 0.2);
+    assert.equal(body.messages[0].role, 'system');
+    assert.match(body.messages[0].content, /Hemie/);
+    assert.equal(options.headers.Authorization, 'Bearer test-key');
+
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: '<think>hidden</think> Llama says donate safely with screening.',
+            },
+          },
+        ],
+      }),
+    };
+  };
+
+  const result = await generateHemieReply({
+    messages: [{ role: 'user', content: 'Does drinking coffee affect a blood donation?' }],
+    context: { bloodType: 'O-', role: 'donor' },
+    env: {
+      HEMIE_LLM_API_KEY: 'test-key',
+    },
+    fetchImpl,
+  });
+
+  assert.equal(result.source, 'llm');
+  assert.match(result.reply, /Llama says donate safely/);
+  assert.doesNotMatch(result.reply, /hidden|think/i);
+});
+
 test('generateHemieReply uses LLM when configured', async () => {
   const fetchImpl = async (url, options) => {
     assert.match(String(url), /generateContent/);
@@ -135,7 +259,7 @@ test('generateHemieReply uses LLM when configured', async () => {
   };
 
   const result = await generateHemieReply({
-    messages: [{ role: 'user', content: 'How does blood matching work?' }],
+    messages: [{ role: 'user', content: 'Does drinking coffee affect a blood donation?' }],
     context: { bloodType: 'O-', role: 'donor' },
     env: {
       HEMIE_LLM_API_KEY: 'test-key',
@@ -241,7 +365,7 @@ test('system prompt instructs multilingual replies', async () => {
   };
 
   const result = await generateHemieReply({
-    messages: [{ role: 'user', content: 'Pwede ba akong mag-donate?' }],
+    messages: [{ role: 'user', content: 'Paano ako aalertuhan kung nagbago ang donation status?' }],
     context: {},
     env: {
       HEMIE_LLM_API_KEY: 'test-key',
