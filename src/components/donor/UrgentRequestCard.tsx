@@ -1,4 +1,4 @@
-import { ArrowRight, HeartHandshake, MapPin, MessageCircle } from 'lucide-react-native';
+import { Eye, HeartHandshake, MapPin, MessageCircle } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, fontFamilies, shadows } from '@/constants/theme';
@@ -126,7 +126,7 @@ export function UrgentRequestCard({
           style={({ pressed }) => [styles.iconButton, pressed ? styles.buttonPressed : null]}
           onPress={onDetails}
         >
-          <ArrowRight color="#0F172A" size={16} strokeWidth={2.25} />
+          <Eye color="#0F172A" size={16} strokeWidth={2.25} />
         </Pressable>
       </View>
     </View>
@@ -142,14 +142,14 @@ const styles = StyleSheet.create({
   },
   bloodBox: {
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.primarySoft,
     borderRadius: 12,
     height: 44,
     justifyContent: 'center',
     width: 44,
   },
   bloodTypeText: {
-    color: '#0F172A',
+    color: colors.primary,
     fontFamily: fontFamilies.displayHeavy,
     fontSize: 16,
     fontWeight: '800',
@@ -159,7 +159,9 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.97 }],
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderWidth: 1,
     borderRadius: 16,
     gap: 12,
     padding: 14,
@@ -183,20 +185,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   donateButtonText: {
-    color: '#FFFFFF',
+    color: colors.primaryForeground,
     fontFamily: fontFamilies.textBold,
     fontSize: 13,
     fontWeight: '700',
   },
   hospitalText: {
-    color: '#0F172A',
+    color: colors.foreground,
     fontFamily: fontFamilies.textBold,
     fontSize: 13.5,
     fontWeight: '700',
   },
   iconButton: {
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.background,
+    borderColor: colors.border,
+    borderWidth: 1,
     borderRadius: 10,
     height: 42,
     justifyContent: 'center',
@@ -219,7 +223,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   metaText: {
-    color: '#64748B',
+    color: colors.muted,
     fontFamily: fontFamilies.textSemibold,
     fontSize: 11,
     fontWeight: '600',
@@ -248,5 +252,3 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 });
-
-

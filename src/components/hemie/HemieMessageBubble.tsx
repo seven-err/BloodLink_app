@@ -1,10 +1,12 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { HemieAvatar } from '@/components/hemie/HemieAvatar';
 import { colors, radii } from '@/constants/theme';
 
 type HemieMessageBubbleProps = {
+  actionLabel?: string;
   isUser?: boolean;
+  onAction?: () => void;
   text: string;
 };
 
@@ -54,7 +56,7 @@ function formatHemieReply(text: string): string {
   return [...answer, ...steps].join('\n').trim();
 }
 
-export function HemieMessageBubble({ isUser = false, text }: HemieMessageBubbleProps) {
+export function HemieMessageBubble({ actionLabel, isUser = false, onAction, text }: HemieMessageBubbleProps) {
   const displayText = isUser ? text : formatHemieReply(text);
 
   if (isUser) {
@@ -72,12 +74,30 @@ export function HemieMessageBubble({ isUser = false, text }: HemieMessageBubbleP
       <HemieAvatar size={44} />
       <View style={styles.assistantBubble}>
         <Text style={styles.assistantText}>{displayText}</Text>
+        {actionLabel && onAction ? (
+          <Pressable accessibilityRole="button" onPress={onAction} style={styles.actionButton}>
+            <Text style={styles.actionText}>{actionLabel}</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  actionButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  actionText: {
+    color: colors.primaryForeground,
+    fontSize: 13,
+    fontWeight: '700',
+  },
   assistantBubble: {
     backgroundColor: colors.card,
     borderColor: colors.border,

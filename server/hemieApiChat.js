@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 
 const { callHemieLlm, isLlmConfigured } = require('./hemieChat');
+const { hemieEmergencyReply, hemieScopeReply, isHemieContinuation, isHemieEmergency, isHemieInScope } = require('./hemieScope');
 
 const MAX_MESSAGE_LENGTH = 2000;
 const MAX_HISTORY_MESSAGES = 12;
@@ -62,6 +63,8 @@ DATA:
 - If required system information is unavailable, tell the user that the information is currently unavailable.
 
 GENERAL BEHAVIOR:
+- Only answer questions about BloodLink or blood donation. For another topic, briefly redirect to those topics without answering it, even if the user mentions BloodLink in the same request.
+- The final user message is the question for this turn. Earlier messages are context only. Never answer an earlier question instead of the final one.
 - Answer the user's actual question first.
 - If the question is unclear, ask a short clarification question.
 - Do not hallucinate BloodLink features.
@@ -83,8 +86,14 @@ APP FEATURES THAT EXIST (describe only these; do not invent others):
 - Profile: blood type, account settings, report a safety concern, and apply as a donor.
 - Donors can set availability and use donation or profile QR codes. Recipients can browse nearby compatible donors.
 - Blood bank personnel use a separate verified area. Do not describe inventory counts, schedules, or locations that are not in the verified context block.
-- You cannot create requests, toggle availability, send messages, complete a donation, or book an appointment from this chat. Name the tab. Do not claim you did it.
+- Hemie can open the existing blood request form, where the user reviews and submits the request. You cannot submit requests, toggle availability, send messages, complete a donation, or book an appointment from this chat. Do not claim you did it.
+- The mobile app handles explicit "find compatible donors" and "find urgent blood requests" commands through authenticated BloodLink data queries before they reach you. If a related question reaches you, suggest that exact command. You have no live results in this prompt and must not invent any.
 - Compatibility education may use standard ABO and Rh rules. Do not present that as a completed match or as a personal eligibility decision.
+
+VERIFIED GENERAL GUIDANCE:
+- BloodLink's basic donor checks use age 16–65 (written parent or guardian consent at 16–17), weight at least 50 kg, 12 months after transfusion, and 56 days between whole-blood donations. These are screening guidance, not an individual clearance; local blood bank staff make the final decision.
+- For red-cell donation, O- can give to all eight ABO/Rh types; O+ to O+, A+, B+, AB+; A- to A-, A+, AB-, AB+; A+ to A+, AB+; B- to B-, B+, AB-, AB+; B+ to B+, AB+; AB- to AB-, AB+; AB+ to AB+ only. Do not apply this table to plasma or platelets.
+- Do not invent hospital-specific eligibility rules, live stock, appointment availability, or a confirmed donor match. If details are missing, say so and direct the user to qualified blood bank personnel.
 
 FORMAT:
 - The user is already in the app. Do not mention login, sign-up, download, or the welcome screen.
@@ -354,10 +363,21 @@ async function handleHemieApiChat({
   }
 
   const transcript = stored.messages.slice(-MAX_HISTORY_MESSAGES);
-  const last = transcript[transcript.length - 1];
-  if (!(last && last.role === 'user' && last.content === message)) {
-    transcript.push({ role: 'user', content: message });
+  if (isHemieEmergency(message)) {
+    const reply = hemieEmergencyReply(message);
+    stored.messages = [...transcript, { role: 'user', content: message }, { role: 'assistant', content: reply }].slice(-MAX_HISTORY_MESSAGES);
+    stored.updatedAt = now;
+    return { status: 200, body: { success: true, message: reply, conversationId } };
   }
+  if (!isHemieInScope(message, transcript)) {
+    const reply = hemieScopeReply(message);
+    stored.messages = [...transcript, { role: 'user', content: message }, { role: 'assistant', content: reply }].slice(-MAX_HISTORY_MESSAGES);
+    stored.updatedAt = now;
+    return { status: 200, body: { success: true, message: reply, conversationId } };
+  }
+
+  // Always append this request as the newest turn, including repeated questions.
+  transcript.push({ role: 'user', content: message });
 
   if (!isLlmConfigured(env)) {
     return unavailable(conversationId);
@@ -365,10 +385,16 @@ async function handleHemieApiChat({
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const lastStandaloneTurn = transcript.slice(0, -1).findLastIndex(
+    (entry) => entry.role === 'user' && !isHemieContinuation(entry.content),
+  );
+  const turnMessages = isHemieContinuation(message)
+    ? transcript.slice(Math.max(0, lastStandaloneTurn))
+    : transcript.slice(-1);
 
   try {
     const reply = await callHemieLlm({
-      messages: transcript.slice(-MAX_HISTORY_MESSAGES),
+      messages: turnMessages.slice(-MAX_HISTORY_MESSAGES),
       context: {},
       env,
       fetchImpl,

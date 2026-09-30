@@ -11,12 +11,6 @@ type StorageBackend = {
   removeItem: (key: string) => Promise<void>;
 };
 
-const isAsyncStorageAvailable = () => {
-  const nativeModule = (AsyncStorage as { nativeModule?: unknown }).nativeModule;
-
-  return nativeModule != null;
-};
-
 // Expo SecureStore values are limited to ~2048 bytes; Supabase sessions are larger.
 class LargeSecureStore implements StorageBackend {
   private keyCache = new Map<string, Uint8Array>();
@@ -113,42 +107,14 @@ class LargeSecureStore implements StorageBackend {
   }
 }
 
-class MemoryStorage implements StorageBackend {
-  private store = new Map<string, string>();
-
-  async getItem(key: string) {
-    return this.store.get(key) ?? null;
-  }
-
-  async setItem(key: string, value: string) {
-    this.store.set(key, value);
-  }
-
-  async removeItem(key: string) {
-    this.store.delete(key);
-  }
-}
-
-const createNativeBackend = (): StorageBackend => {
-  const asyncAvailable = isAsyncStorageAvailable();
-  if (!asyncAvailable) {
-    if (__DEV__) {
-      console.warn(
-        '[BloodLink] AsyncStorage native module unavailable; using in-memory auth storage for this session.',
-      );
-    }
-
-    return new MemoryStorage();
-  }
-
-  return new LargeSecureStore();
-};
-
 let nativeBackend: StorageBackend | null = null;
 
 const getNativeBackend = () => {
   if (!nativeBackend) {
-    nativeBackend = createNativeBackend();
+    // Do not silently fall back to memory: that would make a valid login vanish
+    // whenever the app process restarts. AsyncStorage is an installed native
+    // dependency and should surface a configuration error if it is unavailable.
+    nativeBackend = new LargeSecureStore();
   }
 
   return nativeBackend;

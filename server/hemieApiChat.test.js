@@ -140,6 +140,87 @@ test('returns the success shape', async () => {
   assert.equal(Object.keys(result.body).sort().join(','), 'conversationId,message,success');
 });
 
+test('redirects unrelated questions without calling the model', async () => {
+  let calls = 0;
+  const first = await handleHemieApiChat({
+    body: { message: 'How do I donate blood?' },
+    userId: USER_ID,
+    env: llmEnv(),
+    fetchImpl: async (_url, options) => {
+      calls += 1;
+      return successFetch('Ask the blood bank to screen you.')(_url, options);
+    },
+  });
+  const other = await handleHemieApiChat({
+    body: { message: 'BloodLink, what is the weather today?', conversationId: first.body.conversationId },
+    userId: USER_ID,
+    env: llmEnv(),
+    fetchImpl: async () => { calls += 1; throw new Error('should not call model'); },
+  });
+  assert.equal(other.status, 200);
+  assert.match(other.body.message, /only help with BloodLink and blood donation/i);
+  assert.doesNotMatch(other.body.message, /weather|forecast/i);
+  assert.equal(calls, 1);
+});
+
+test('gives immediate safety direction for an emergency without calling the model', async () => {
+  const result = await handleHemieApiChat({
+    body: { message: "I can't breathe" },
+    userId: USER_ID,
+    env: llmEnv(),
+    fetchImpl: async () => { throw new Error('should not call model'); },
+  });
+  assert.equal(result.status, 200);
+  assert.match(result.body.message, /emergency services|healthcare personnel/i);
+});
+
+test('keeps donation questions in scope even when they mention sport or weather', async () => {
+  const seen = [];
+  const fetchImpl = async (_url, options) => {
+    seen.push(JSON.parse(options.body).messages.at(-1).content);
+    return successFetch('Ask blood bank staff about your donation preparation.')(_url, options);
+  };
+  for (const message of ['Can I play sports after donating blood?', 'Can I donate blood in hot weather?']) {
+    const result = await handleHemieApiChat({ body: { message }, userId: USER_ID, env: llmEnv(), fetchImpl });
+    assert.equal(result.status, 200);
+  }
+  assert.equal(seen.length, 2);
+});
+
+test('sends only the current standalone question and keeps context for an explicit follow-up', async () => {
+  const sent = [];
+  const fetchImpl = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    sent.push(body.messages.filter((entry) => entry.role !== 'system'));
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'Ask blood bank staff for confirmation.' } }] }) };
+  };
+  const first = await handleHemieApiChat({ body: { message: 'How do I donate blood?' }, userId: USER_ID, env: llmEnv(), fetchImpl });
+  await handleHemieApiChat({ body: { message: 'How do I use the BloodLink map?', conversationId: first.body.conversationId }, userId: USER_ID, env: llmEnv(), fetchImpl });
+  await handleHemieApiChat({ body: { message: 'How do I use the BloodLink map?', conversationId: first.body.conversationId }, userId: USER_ID, env: llmEnv(), fetchImpl });
+  await handleHemieApiChat({ body: { message: 'tell me more', conversationId: first.body.conversationId }, userId: USER_ID, env: llmEnv(), fetchImpl });
+
+  assert.equal(sent.length, 4);
+  assert.deepEqual(sent[1], [{ role: 'user', content: 'How do I use the BloodLink map?' }]);
+  assert.deepEqual(sent[2], [{ role: 'user', content: 'How do I use the BloodLink map?' }]);
+  assert.equal(sent[3].at(-1).content, 'tell me more');
+  assert.ok(sent[3].length > 1);
+});
+
+test('multiple short follow-ups stay with the latest BloodLink question', async () => {
+  const sent = [];
+  const fetchImpl = async (_url, options) => {
+    sent.push(JSON.parse(options.body).messages.filter((entry) => entry.role !== 'system'));
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'Use the Requests tab.' } }] }) };
+  };
+  const first = await handleHemieApiChat({ body: { message: 'How do I use BloodLink?' }, userId: USER_ID, env: llmEnv(), fetchImpl });
+  const second = await handleHemieApiChat({ body: { message: 'next', conversationId: first.body.conversationId }, userId: USER_ID, env: llmEnv(), fetchImpl });
+  const third = await handleHemieApiChat({ body: { message: 'next', conversationId: second.body.conversationId }, userId: USER_ID, env: llmEnv(), fetchImpl });
+  assert.equal(third.status, 200);
+  assert.equal(sent[2][0].content, 'How do I use BloodLink?');
+  assert.equal(sent[2].at(-1).content, 'next');
+  assert.equal(sent[2].filter((entry) => entry.role === 'user').length, 3);
+});
+
 test('uses the Hemie system prompt and no personal health context', async () => {
   let systemText = '';
   let latestUserText = '';

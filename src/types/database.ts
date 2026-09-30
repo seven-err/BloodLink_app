@@ -930,6 +930,17 @@ export type Database = {
           stock: Json;
         }[];
       };
+      list_verified_bloodbank_facilities: {
+        Args: Record<string, never>;
+        Returns: {
+          bloodbank_id: string;
+          display_name: string;
+          branch_location: string | null;
+          address: string | null;
+          latitude: number | null;
+          longitude: number | null;
+        }[];
+      };
       get_blood_inventory_summary: {
         Args: Record<string, never>;
         Returns: Json;

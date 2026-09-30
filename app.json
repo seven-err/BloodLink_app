@@ -53,10 +53,18 @@
                                  [
                                      "expo-image-picker",
                                      {
-                                         "photosPermission":  "Allow BloodLink to access your photos so you can set a profile picture."
+                                         "photosPermission":  "Allow BloodLink to access your photos for profile pictures and medical request documents.",
+                                         "cameraPermission":  "Allow BloodLink to use your camera to photograph a medical request document."
                                      }
                                  ],
                                  "expo-web-browser",
+                                 [
+                                     "expo-speech-recognition",
+                                     {
+                                         "microphonePermission": "Allow BloodLink to use the microphone to dictate chat messages.",
+                                         "speechRecognitionPermission": "Allow BloodLink to turn your speech into text for chat messages."
+                                     }
+                                 ],
                                  [
                                      "expo-notifications",
                                      {

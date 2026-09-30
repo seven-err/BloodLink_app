@@ -13,7 +13,11 @@
   "exclude": [
     "node_modules",
     "supabase/functions",
-    "sev"
+    "sev",
+    "dist",
+    "build",
+    "web-build",
+    ".expo"
   ]
 }
 

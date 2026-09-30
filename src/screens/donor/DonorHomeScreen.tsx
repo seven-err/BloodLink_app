@@ -9,12 +9,14 @@ import {
   Clock,
   Droplets,
   MapPin,
+  MessageCircle,
 } from 'lucide-react-native';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { UrgentRequestCard } from '@/components/donor/UrgentRequestCard';
 import { ModeToggle } from '@/components/common/ModeToggle';
+import { DashboardQuickActions } from '@/components/common/DashboardQuickActions';
 import { PrimaryButton } from '@/components/common/PrimaryButton';
 import { Skeleton } from '@/components/common/Skeleton';
 import { HemieFloatingButton } from '@/components/hemie/HemieFloatingButton';
@@ -319,51 +321,35 @@ export function DonorHomeScreen({ navigation }: Props) {
           </View>
         ) : null}
 
-        {/* 4-Feature Quick Action Bar */}
-        <View style={donorHomeStyles.quickFeatureGrid}>
-          <Pressable
-            accessibilityLabel="View blood requests"
-            accessibilityRole="button"
-            style={donorHomeStyles.quickFeatureCol}
-            onPress={() => navigation.navigate('Requests')}
-          >
-            <View style={[donorHomeStyles.quickFeatureBtn, { backgroundColor: '#fee2e2' }]}>
-              <Droplets color={colors.primary} size={24} />
-              {urgentRequests.length > 0 ? (
-                <View style={donorHomeStyles.quickFeatureBadge}>
-                  <Text style={donorHomeStyles.quickFeatureBadgeText}>{urgentRequests.length}</Text>
-                </View>
-              ) : null}
-            </View>
-            <Text style={donorHomeStyles.quickFeatureLabel}>Requests</Text>
-          </Pressable>
-
-
-
-          <Pressable
-            accessibilityLabel="View nearby map"
-            accessibilityRole="button"
-            style={donorHomeStyles.quickFeatureCol}
-            onPress={() => navigation.navigate('Map')}
-          >
-            <View style={[donorHomeStyles.quickFeatureBtn, { backgroundColor: '#e0f2fe' }]}>
-              <MapPin color="#0284c7" size={24} />
-            </View>
-            <Text style={donorHomeStyles.quickFeatureLabel}>Map</Text>
-          </Pressable>
-
-          <Pressable
-            accessibilityLabel="View donation history"
-            accessibilityRole="button"
-            style={donorHomeStyles.quickFeatureCol}
-            onPress={() => navigation.getParent()?.navigate('MyDonations')}
-          >
-            <View style={[donorHomeStyles.quickFeatureBtn, { backgroundColor: '#fef3c7' }]}>
-              <Clock color="#d97706" size={24} />
-            </View>
-            <Text style={donorHomeStyles.quickFeatureLabel}>History</Text>
-          </Pressable>
-        </View>
+        <DashboardQuickActions
+          actions={[
+            {
+              accessibilityLabel: 'View blood requests',
+              badge: urgentRequests.length,
+              icon: Droplets,
+              label: 'Requests',
+              onPress: () => navigation.navigate('Requests'),
+            },
+            {
+              accessibilityLabel: 'View nearby map',
+              icon: MapPin,
+              label: 'Nearby',
+              onPress: () => navigation.navigate('Map'),
+            },
+            {
+              accessibilityLabel: 'View donation history',
+              icon: Clock,
+              label: 'History',
+              onPress: () => navigation.getParent()?.navigate('MyDonations'),
+            },
+            {
+              accessibilityLabel: 'View messages',
+              icon: MessageCircle,
+              label: 'Messages',
+              onPress: () => navigation.navigate('Chat'),
+            },
+          ]}
+        />
 
 
 

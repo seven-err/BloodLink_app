@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { VoiceInputButton } from '@/components/chat/VoiceInputButton';
 import { HemieAvatar } from '@/components/hemie/HemieAvatar';
 import { HemieEmergencyDisclaimer } from '@/components/hemie/HemieEmergencyDisclaimer';
 import { HemieMessageBubble } from '@/components/hemie/HemieMessageBubble';
@@ -26,6 +27,7 @@ import {
   HEMIE_UNAVAILABLE_MESSAGE,
   type HemieChatMessage,
 } from '@/services/hemie/chat';
+import { detectHemieActionIntent, resolveHemieAction, type HemieActionLink } from '@/services/hemie/actions';
 import {
   getHemieWelcomeMessage,
   HEMIE_DISCLAIMER,
@@ -38,6 +40,8 @@ type ChatMessage = {
   id: string;
   isUser: boolean;
   text: string;
+  local?: boolean;
+  link?: HemieActionLink;
 };
 
 const DISCLAIMER_STORAGE_KEY = 'hemie_emergency_disclaimer_hidden';
@@ -50,7 +54,8 @@ const createMessageId = () => `hemie-${Date.now()}-${messageCounter++}`;
 
 const toApiMessages = (chatMessages: ChatMessage[]): HemieChatMessage[] =>
   chatMessages
-    .filter((message) => message.text !== WELCOME_TEXT)
+    .slice(1)
+    .filter((message) => !message.local)
     .map((message) => ({
       role: message.isUser ? 'user' : 'assistant',
       content: message.text,
@@ -59,11 +64,12 @@ const toApiMessages = (chatMessages: ChatMessage[]): HemieChatMessage[] =>
 export function HemieAIScreen({ navigation }: Props) {
   const { bottom: bottomInset, top: topInset } = useSafeAreaInsets();
   const keyboardHeight = useKeyboardHeight();
-  const { session } = useAuth();
+  const { profile, session } = useAuth();
   const scrollRef = useRef<ScrollView>(null);
   const messagesRef = useRef<ChatMessage[]>([]);
+  const pendingRef = useRef(false);
   const requestIdRef = useRef(0);
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  const conversationIdRef = useRef<string | null>(null);
   const [draft, setDraft] = useState('');
   const [errorText, setErrorText] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -111,23 +117,19 @@ export function HemieAIScreen({ navigation }: Props) {
 
   const startNewChat = useCallback(() => {
     requestIdRef.current += 1;
-    setConversationId(null);
+    pendingRef.current = false;
+    messagesRef.current = [{ id: createMessageId(), isUser: false, text: WELCOME_TEXT }];
+    conversationIdRef.current = null;
     setDraft('');
     setErrorText(null);
     setPending(false);
-    setMessages([
-      {
-        id: createMessageId(),
-        isUser: false,
-        text: WELCOME_TEXT,
-      },
-    ]);
+    setMessages(messagesRef.current);
   }, []);
 
   const appendExchange = useCallback(
     async (question: string) => {
       const trimmed = question.trim();
-      if (!trimmed || pending) {
+      if (!trimmed || pendingRef.current) {
         return;
       }
 
@@ -142,30 +144,40 @@ export function HemieAIScreen({ navigation }: Props) {
         return;
       }
 
+      const actionIntent = detectHemieActionIntent(trimmed);
       const userMessage: ChatMessage = {
         id: createMessageId(),
         isUser: true,
         text: trimmed,
+        local: Boolean(actionIntent),
       };
       const requestId = requestIdRef.current + 1;
       requestIdRef.current = requestId;
+      const history = toApiMessages(messagesRef.current);
+      pendingRef.current = true;
+      messagesRef.current = [...messagesRef.current, userMessage];
 
       setDraft('');
       setErrorText(null);
       setPending(true);
-      setMessages((current) => {
-        const next = [...current, userMessage];
-        messagesRef.current = next;
-        return next;
-      });
+      setMessages(messagesRef.current);
       scrollToBottom();
 
-      const history = toApiMessages(messagesRef.current).slice(0, -1);
-
       try {
+        if (actionIntent) {
+          const actionReply = await resolveHemieAction(actionIntent, trimmed, profile);
+          if (requestId !== requestIdRef.current) return;
+          messagesRef.current = [
+            ...messagesRef.current,
+            { id: createMessageId(), isUser: false, text: actionReply.message, local: true, link: actionReply.link },
+          ];
+          setMessages(messagesRef.current);
+          return;
+        }
+
         const result = await askHemie({
           accessToken,
-          conversationId,
+          conversationId: conversationIdRef.current,
           history,
           message: trimmed,
         });
@@ -174,15 +186,16 @@ export function HemieAIScreen({ navigation }: Props) {
           return;
         }
 
-        setConversationId(result.conversationId);
-        setMessages((current) => [
-          ...current,
+        conversationIdRef.current = result.conversationId;
+        messagesRef.current = [
+          ...messagesRef.current,
           {
             id: createMessageId(),
             isUser: false,
             text: result.message,
           },
-        ]);
+        ];
+        setMessages(messagesRef.current);
       } catch (error) {
         if (requestId !== requestIdRef.current) {
           return;
@@ -195,12 +208,13 @@ export function HemieAIScreen({ navigation }: Props) {
         setErrorText(fallback);
       } finally {
         if (requestId === requestIdRef.current) {
+          pendingRef.current = false;
           setPending(false);
           scrollToBottom();
         }
       }
     },
-    [conversationId, pending, scrollToBottom, session?.access_token],
+    [profile, scrollToBottom, session?.access_token],
   );
 
   const showSuggestedQuestions = messages.length === 1 && !pending;
@@ -291,6 +305,18 @@ export function HemieAIScreen({ navigation }: Props) {
             key={message.id}
             isUser={message.isUser}
             text={message.text}
+            actionLabel={message.link?.label}
+            onAction={message.link ? () => {
+              if (message.link?.target === 'create_request') {
+                navigation.navigate('CreateBloodRequest', message.link.bloodType ? { bloodType: message.link.bloodType } : undefined);
+              } else if (message.link?.target === 'map') {
+                navigation.navigate('AppTabs', { screen: 'Map' });
+              } else if (message.link?.target === 'request_detail') {
+                navigation.navigate('DonorRequestDetail', { requestId: message.link.requestId });
+              } else if (message.link?.target === 'requests') {
+                navigation.navigate('AppTabs', { screen: 'Requests' });
+              }
+            } : undefined}
           />
         ))}
 
@@ -343,6 +369,13 @@ export function HemieAIScreen({ navigation }: Props) {
               }}
               onSubmitEditing={() => {
                 void appendExchange(draft);
+              }}
+            />
+            <VoiceInputButton
+              disabled={pending}
+              onTranscript={(transcript) => {
+                setDraft((current) => `${current.trimEnd()}${current.trim() ? ' ' : ''}${transcript}`);
+                setErrorText(null);
               }}
             />
             <Pressable

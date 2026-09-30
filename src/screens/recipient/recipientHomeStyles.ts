@@ -33,7 +33,7 @@ export const recipientHomeStyles = StyleSheet.create({
   },
   emergencyButton: {
     alignItems: 'center',
-    backgroundColor: colors.card,
+    backgroundColor: colors.primary,
     borderRadius: 14,
     flexDirection: 'row',
     gap: 8,
@@ -42,12 +42,14 @@ export const recipientHomeStyles = StyleSheet.create({
     paddingHorizontal: 18,
   },
   emergencyButtonText: {
-    color: colors.primary,
+    color: colors.primaryForeground,
     fontSize: 16,
     fontWeight: '700',
   },
   emergencyCard: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderWidth: 1,
     borderRadius: radii.card,
     gap: 14,
     padding: 20,
@@ -59,14 +61,22 @@ export const recipientHomeStyles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   emergencySubtitle: {
-    color: 'rgba(255,255,255,0.9)',
+    color: colors.muted,
     fontSize: 14,
     lineHeight: 20,
   },
   emergencyTitle: {
-    color: colors.primaryForeground,
-    fontSize: 20,
-    fontWeight: '800',
+    color: colors.foreground,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  emergencyIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.primarySoft,
+    borderRadius: 999,
+    height: 38,
+    justifyContent: 'center',
+    width: 38,
   },
   errorText: {
     color: colors.primary,
@@ -274,4 +284,3 @@ export const recipientHomeStyles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-

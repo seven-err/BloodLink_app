@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DonorStatCard } from '@/components/donor/DonorStatCard';
 import { NearbyDonorFeedCard } from '@/components/recipient/NearbyDonorFeedCard';
 import { ModeToggle } from '@/components/common/ModeToggle';
+import { DashboardQuickActions } from '@/components/common/DashboardQuickActions';
 import { PrimaryButton } from '@/components/common/PrimaryButton';
 import { Skeleton } from '@/components/common/Skeleton';
 import { HemieFloatingButton } from '@/components/hemie/HemieFloatingButton';
@@ -353,7 +354,9 @@ export function RecipientHomeScreen({ navigation }: Props) {
                 Broadcast instant SOS to nearby donors
               </Text>
             </View>
-            <AlertCircle color={colors.primaryForeground} size={24} />
+            <View style={recipientHomeStyles.emergencyIcon}>
+              <AlertCircle color={colors.primary} size={20} />
+            </View>
           </View>
           <Pressable
             accessibilityLabel="Create blood request"
@@ -364,65 +367,40 @@ export function RecipientHomeScreen({ navigation }: Props) {
             ]}
             onPress={() => navigation.getParent()?.navigate('CreateBloodRequest')}
           >
-            <Plus color={colors.primary} size={18} />
+            <Plus color={colors.primaryForeground} size={18} />
             <Text style={recipientHomeStyles.emergencyButtonText}>Create Blood Request</Text>
           </Pressable>
         </View>
 
-        <View style={recipientHomeStyles.quickBar}>
-          <Pressable
-            accessibilityLabel="Create new request"
-            accessibilityRole="button"
-            style={recipientHomeStyles.quickItem}
-            onPress={() => navigation.getParent()?.navigate('CreateBloodRequest')}
-          >
-            <View style={[recipientHomeStyles.quickIconButton, { backgroundColor: colors.background }]}>
-              <Plus color={colors.foreground} size={22} strokeWidth={2.5} />
-            </View>
-            <Text style={recipientHomeStyles.quickLabel}>New Request</Text>
-          </Pressable>
-
-          <Pressable
-            accessibilityLabel="View my requests"
-            accessibilityRole="button"
-            style={recipientHomeStyles.quickItem}
-            onPress={() => navigation.navigate('Requests')}
-          >
-            <View style={[recipientHomeStyles.quickIconButton, { backgroundColor: colors.infoSoft }]}>
-              <FileText color={colors.info} size={22} strokeWidth={2.25} />
-              {activeRequestCount > 0 ? (
-                <View style={recipientHomeStyles.quickBadge}>
-                  <Text style={recipientHomeStyles.quickBadgeText}>{activeRequestCount}</Text>
-                </View>
-              ) : null}
-            </View>
-            <Text style={recipientHomeStyles.quickLabel}>My Requests</Text>
-          </Pressable>
-
-          <Pressable
-            accessibilityLabel="View donor map"
-            accessibilityRole="button"
-            style={recipientHomeStyles.quickItem}
-            onPress={() => navigation.navigate('Map')}
-          >
-            <View style={[recipientHomeStyles.quickIconButton, { backgroundColor: colors.successSoft }]}>
-              <MapPin color={colors.success} size={22} strokeWidth={2.25} />
-            </View>
-            <Text style={recipientHomeStyles.quickLabel}>Donor Map</Text>
-          </Pressable>
-
-          <Pressable
-            accessibilityLabel="View messages"
-            accessibilityRole="button"
-            style={recipientHomeStyles.quickItem}
-            onPress={() => navigation.navigate('Chat')}
-          >
-            <View style={[recipientHomeStyles.quickIconButton, { backgroundColor: colors.background }]}>
-              <MessageCircle color={colors.foreground} size={22} strokeWidth={2.25} />
-            </View>
-            <Text style={recipientHomeStyles.quickLabel}>Messages</Text>
-          </Pressable>
-        </View>
+        <DashboardQuickActions
+          actions={[
+            {
+              accessibilityLabel: 'Create new request',
+              icon: Plus,
+              label: 'New Request',
+              onPress: () => navigation.getParent()?.navigate('CreateBloodRequest'),
+            },
+            {
+              accessibilityLabel: 'View my requests',
+              badge: activeRequestCount,
+              icon: FileText,
+              label: 'My Requests',
+              onPress: () => navigation.navigate('Requests'),
+            },
+            {
+              accessibilityLabel: 'View donor map',
+              icon: MapPin,
+              label: 'Nearby',
+              onPress: () => navigation.navigate('Map'),
+            },
+            {
+              accessibilityLabel: 'View messages',
+              icon: MessageCircle,
+              label: 'Messages',
+              onPress: () => navigation.navigate('Chat'),
+            },
+          ]}
+        />
 
 
 

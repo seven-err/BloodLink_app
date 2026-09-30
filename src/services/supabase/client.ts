@@ -1,7 +1,7 @@
 import 'react-native-url-polyfill/auto';
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { env, hasRequiredEnv } from '@/config/env';
 import type { Database } from '@/types/database';
@@ -29,6 +29,18 @@ const getSupabaseClient = (): SupabaseClient<Database> => {
       flowType: 'pkce',
     },
   });
+
+  // Supabase recommends tying refresh work to the React Native app lifecycle.
+  // This listener is registered once because the client itself is a singleton.
+  if (Platform.OS !== 'web') {
+    AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        supabaseClient?.auth.startAutoRefresh();
+      } else {
+        supabaseClient?.auth.stopAutoRefresh();
+      }
+    });
+  }
 
   return supabaseClient;
 };

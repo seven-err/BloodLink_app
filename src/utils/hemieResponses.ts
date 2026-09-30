@@ -14,6 +14,9 @@ export const HEMIE_SUGGESTED_QUESTIONS = [
   'How do I donate blood?',
   'Blood type information',
   'How do I use BloodLink?',
+  'Find compatible donors for A+',
+  'Find urgent blood requests',
+  'Create a blood request',
 ] as const;
 
 export const HEMIE_DISCLAIMER =

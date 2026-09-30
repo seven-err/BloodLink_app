@@ -77,7 +77,7 @@ export function ModeToggle({ showHint = false }: ModeToggleProps) {
                 pointerEvents="none"
                 style={[styles.segmentContent, styles.segmentContentAbsolute, activeStyle]}
               >
-                <Icon color={colors.primaryForeground} size={16} strokeWidth={2.5} />
+                <Icon color={colors.primary} size={16} strokeWidth={2.5} />
                 <Text style={styles.labelActive}>{label}</Text>
               </Animated.View>
             </Pressable>
@@ -98,8 +98,8 @@ export function ModeToggle({ showHint = false }: ModeToggleProps) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.border,
-    borderRadius: radii.pill,
+    backgroundColor: '#f0f2f5',
+    borderRadius: radii.card,
     flexDirection: 'row',
     height: 44,
     padding: 3,
@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   labelActive: {
-    color: colors.primaryForeground,
+    color: colors.primary,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -144,8 +144,8 @@ const styles = StyleSheet.create({
     top: 0,
   },
   slidingIndicator: {
-    backgroundColor: colors.primary,
-    borderRadius: radii.pill,
+    backgroundColor: colors.card,
+    borderRadius: 13,
     bottom: 3,
     left: 3,
     position: 'absolute',

@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatSafetyBanner, showChatSafetyBanner } from '@/components/chat/ChatSafetyBanner';
 import { ChatThreadSkeleton } from '@/components/chat/ChatThreadSkeleton';
 import { MessageBubble } from '@/components/chat/MessageBubble';
+import { VoiceInputButton } from '@/components/chat/VoiceInputButton';
 import { ConversationAvatar } from '@/components/messages/ConversationAvatar';
 import { PrimaryButton } from '@/components/common/PrimaryButton';
 import { colors } from '@/constants/theme';
@@ -384,6 +385,13 @@ export function ChatThreadScreen({ navigation, route }: Props) {
               blurOnSubmit={false}
               onChangeText={setDraft}
               onSubmitEditing={() => void handleSend()}
+            />
+            <VoiceInputButton
+              disabled={sendState === 'sending'}
+              onTranscript={(transcript) => {
+                setDraft((current) => `${current.trimEnd()}${current.trim() ? ' ' : ''}${transcript}`);
+                setSendError(null);
+              }}
             />
             <Pressable
               accessibilityLabel="Send message"
